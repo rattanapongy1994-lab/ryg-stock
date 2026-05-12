@@ -2,1168 +2,1213 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RYG Stock System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>RYG Stock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <style>
-  :root {
-    --green: #1D9E75; --green-dark: #0F6E56; --green-light: #E1F5EE;
-    --blue: #185FA5; --blue-light: #E6F1FB;
-    --amber: #854F0B; --amber-light: #FAEEDA;
-    --red: #A32D2D; --red-light: #FCEBEB;
-    --purple: #5B3DC8; --purple-light: #EEEAFF;
-    --bg: #F4F6F9; --surface: #fff;
-    --border: rgba(0,0,0,0.1); --border-md: rgba(0,0,0,0.18);
-    --text: #1a1a1a; --text-2: #555; --text-3: #888;
-    --radius: 8px; --radius-lg: 12px;
-    --font: 'Sarabun', 'Segoe UI', sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; }
+:root {
+  --g: #1D9E75; --gd: #0F6E56; --gl: #E1F5EE; --gll: #F0FAF6;
+  --b: #185FA5; --bl: #E6F1FB;
+  --am: #7A4400; --aml: #FFF0DC;
+  --r: #C0392B; --rl: #FDECEA;
+  --pu: #5B3DC8; --pul: #EEEAFF;
+  --bg: #F2F4F7; --surf: #fff;
+  --bdr: rgba(0,0,0,0.08); --bdrm: rgba(0,0,0,0.15);
+  --tx: #111; --tx2: #555; --tx3: #999;
+  --rad: 10px; --radlg: 14px; --radsm: 6px;
+  --font: 'Sarabun','Segoe UI',sans-serif;
+  --mono: 'IBM Plex Mono',monospace;
+  --nav-h: 60px;  /* bottom nav height on mobile */
+  --top-h: 52px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);font-size:14px;overflow-x:hidden;}
 
-  /* LOGIN */
-  #loginScreen { min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0F6E56,#1D9E75,#5DCAA5); }
-  .login-card { background:var(--surface);border-radius:16px;padding:2.5rem;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.15); }
-  .login-logo { display:flex;align-items:center;gap:12px;margin-bottom:2rem; }
-  .logo-icon { width:48px;height:48px;background:var(--green);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px; }
-  .btn-google { width:100%;padding:12px;border:1.5px solid var(--border-md);border-radius:var(--radius);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-size:14px;font-weight:500; }
-  .btn-google:hover { background:#f5f5f5; }
-  .login-note { font-size:12px;color:var(--text-3);text-align:center;margin-top:1rem; }
+/* ══════════════════════════════════════
+   LOADING
+══════════════════════════════════════ */
+#loadingScreen{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px;}
+.spinner{width:36px;height:36px;border:3px solid var(--gl);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
-  /* LAYOUT */
-  #mainApp { display:none;flex-direction:column;min-height:100vh; }
-  .topbar { background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50; }
-  .topbar-left { display:flex;align-items:center;gap:12px; }
-  .topbar-logo { width:32px;height:32px;background:var(--green);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px; }
-  .topbar-title { font-size:16px;font-weight:700; }
-  .topbar-right { display:flex;align-items:center;gap:12px; }
-  .user-chip { display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:20px;padding:4px 12px 4px 4px; }
-  .user-avatar { width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--green-dark); }
-  .badge-role { padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700; }
-  .badge-admin { background:var(--green-light);color:var(--green-dark); }
-  .badge-user { background:var(--blue-light);color:var(--blue); }
-  .btn-logout { padding:6px 14px;border:1px solid var(--border-md);border-radius:var(--radius);background:transparent;cursor:pointer;font-size:13px;color:var(--text-2); }
-  .btn-logout:hover { background:var(--bg); }
-  .nav-tabs { background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;overflow-x:auto; }
-  .nav-tab { padding:12px 18px;font-size:13px;color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px;white-space:nowrap; }
-  .nav-tab.active { color:var(--green);border-bottom-color:var(--green);font-weight:600; }
-  .nav-tab:hover:not(.active) { color:var(--text); }
-  .content { padding:1.5rem;flex:1; }
+/* ══════════════════════════════════════
+   LOGIN
+══════════════════════════════════════ */
+#loginScreen{min-height:100vh;display:none;align-items:center;justify-content:center;background:linear-gradient(150deg,#0a5c45,#1D9E75 55%,#64d4aa);}
+.login-card{background:#fff;border-radius:20px;padding:2.2rem;width:340px;max-width:90vw;box-shadow:0 24px 64px rgba(0,0,0,.18);}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:1.8rem;}
+.logo-box{width:44px;height:44px;background:var(--g);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.login-card h1{font-size:18px;font-weight:700;}
+.login-card p{font-size:12px;color:var(--tx3);}
+.btn-google{width:100%;padding:11px;border:1.5px solid var(--bdrm);border-radius:var(--rad);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-size:14px;font-weight:600;color:var(--tx);font-family:var(--font);transition:background .15s;}
+.btn-google:hover{background:#f5f5f5;}
+.login-note{font-size:11px;color:var(--tx3);text-align:center;margin-top:.9rem;line-height:1.6;}
 
-  /* CARDS */
-  .stat-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem; }
-  .stat-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem; }
-  .stat-label { font-size:12px;color:var(--text-2);margin-bottom:6px; }
-  .stat-value { font-size:26px;font-weight:700; }
-  .stat-sub { font-size:11px;color:var(--text-3);margin-top:2px; }
-  .card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden; }
-  .card-header { padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between; }
-  .card-title { font-size:14px;font-weight:600; }
+/* ══════════════════════════════════════
+   APP SHELL
+══════════════════════════════════════ */
+#mainApp{display:none;flex-direction:column;min-height:100vh;}
 
-  /* TABLE */
-  .table-wrap { overflow-x:auto; }
-  table { width:100%;border-collapse:collapse;table-layout:fixed; }
-  th { padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);background:#FAFAFA;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px; }
-  td { padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border); }
-  tr:last-child td { border-bottom:none; }
-  tr:hover td { background:#FAFAFA; }
+/* TOP BAR */
+.topbar{background:var(--surf);border-bottom:1px solid var(--bdr);height:var(--top-h);display:flex;align-items:center;padding:0 1rem;position:sticky;top:0;z-index:100;gap:10px;}
+.topbar-logo{width:30px;height:30px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.topbar-title{font-size:15px;font-weight:700;flex:1;}
+.user-mini{display:flex;align-items:center;gap:7px;}
+.user-ava{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--gl);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--gd);flex-shrink:0;}
+.user-name-top{font-size:12px;font-weight:600;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.badge-role{padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;}
+.badge-admin{background:var(--gl);color:var(--gd);}
+.badge-user{background:var(--bl);color:var(--b);}
+.btn-topout{padding:5px 10px;border:1px solid var(--bdrm);border-radius:var(--radsm);background:transparent;cursor:pointer;font-size:12px;color:var(--tx2);font-family:var(--font);}
 
-  /* BADGES */
-  .badge { display:inline-flex;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600; }
-  .badge-ok { background:var(--green-light);color:var(--green-dark); }
-  .badge-low { background:var(--amber-light);color:var(--amber); }
-  .badge-out { background:var(--red-light);color:var(--red); }
-  .badge-in { background:var(--green-light);color:var(--green-dark); }
-  .badge-out2 { background:var(--red-light);color:var(--red); }
-  .badge-sn { background:var(--purple-light);color:var(--purple);font-family:monospace; }
-  .badge-used { background:#F0F0F0;color:#888; }
-  .badge-available { background:var(--green-light);color:var(--green-dark); }
-  .badge-damaged { background:var(--amber-light);color:var(--amber); }
+/* DESKTOP NAV TABS */
+.nav-tabs{background:var(--surf);border-bottom:1px solid var(--bdr);padding:0 1rem;display:flex;overflow-x:auto;scrollbar-width:none;}
+.nav-tabs::-webkit-scrollbar{display:none;}
+.nav-tab{padding:10px 14px;font-size:13px;color:var(--tx2);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;}
+.nav-tab.active{color:var(--g);border-bottom-color:var(--g);font-weight:700;}
 
-  /* BUTTONS */
-  .btn { padding:7px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;border:1px solid var(--border-md);background:var(--surface);color:var(--text-2);display:inline-flex;align-items:center;gap:6px; }
-  .btn:hover { background:var(--bg); }
-  .btn-primary { background:var(--green);color:#fff;border-color:var(--green); }
-  .btn-primary:hover { background:var(--green-dark); }
-  .btn-danger { background:var(--red-light);color:var(--red);border-color:#F09595; }
-  .btn-icon { padding:5px 8px;border-radius:6px; }
-  .btn:disabled { opacity:.45;cursor:not-allowed; }
+/* CONTENT */
+.content{padding:1rem;flex:1;padding-bottom:calc(var(--nav-h) + 1rem);}
+@media(min-width:768px){.content{padding:1.25rem;padding-bottom:1.25rem;}}
 
-  /* FORM */
-  .field { margin-bottom:1rem; }
-  .field label { display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:5px; }
-  .field input,.field select,.field textarea { width:100%;padding:8px 12px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:13px;font-family:var(--font);background:var(--surface);color:var(--text); }
-  .field textarea { resize:vertical;min-height:72px; }
-  .field input:focus,.field select:focus,.field textarea:focus { outline:none;border-color:var(--green); }
-  .grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
-  .grid-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px; }
+/* MOBILE BOTTOM NAV */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:var(--surf);border-top:1px solid var(--bdr);z-index:100;align-items:stretch;}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--tx3);font-size:10px;font-weight:500;padding:6px 2px;min-width:0;}
+.bnav-item .ico{font-size:19px;line-height:1;}
+.bnav-item.active{color:var(--g);}
+.bnav-item.active .ico{transform:scale(1.1);}
+@media(max-width:767px){
+  .nav-tabs{display:none;}
+  .bottom-nav{display:flex;}
+}
 
-  /* MODAL */
-  .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200; }
-  .modal { background:var(--surface);border-radius:14px;padding:1.75rem;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto; }
-  .modal-lg { width:720px; }
-  .modal-xl { width:900px; }
-  .modal-title { font-size:16px;font-weight:700;margin-bottom:1.25rem; }
-  .modal-actions { display:flex;gap:8px;justify-content:flex-end;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border); }
+/* ══════════════════════════════════════
+   STAT CARDS
+══════════════════════════════════════ */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:1rem;}
+@media(min-width:600px){.stat-grid{grid-template-columns:repeat(4,1fr);}}
+.stat-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--radlg);padding:1rem;}
+.stat-label{font-size:11px;color:var(--tx2);margin-bottom:4px;}
+.stat-value{font-size:24px;font-weight:700;line-height:1.1;}
+.stat-sub{font-size:10px;color:var(--tx3);margin-top:2px;}
 
-  /* UNIT DETAIL */
-  .unit-card {
-    border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;
-    display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
-    transition:border-color .15s;
-  }
-  .unit-card:hover { border-color:var(--green); }
-  .unit-sn { font-family:monospace;font-size:12px;font-weight:700;color:var(--purple);background:var(--purple-light);padding:3px 8px;border-radius:6px; }
-  .unit-no-sn { font-family:monospace;font-size:11px;color:var(--text-3);background:#F0F0F0;padding:3px 8px;border-radius:6px; }
-  .unit-meta { font-size:11px;color:var(--text-3);margin-top:2px; }
+/* ══════════════════════════════════════
+   CARDS
+══════════════════════════════════════ */
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--radlg);overflow:hidden;}
+.card-header{padding:.85rem 1rem;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.card-title{font-size:13px;font-weight:700;}
+.section-gap{margin-bottom:1rem;}
 
-  /* UNIT STATUS DOTS */
-  .dot { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
-  .dot-available { background:#1D9E75; }
-  .dot-used { background:#888; }
-  .dot-damaged { background:#E5A600; }
+/* ══════════════════════════════════════
+   CATEGORY GROUP (accordion)
+══════════════════════════════════════ */
+.cat-group{margin-bottom:.75rem;}
+.cat-header{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rad);padding:.7rem 1rem;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;transition:background .15s;}
+.cat-header:hover{background:var(--gll);}
+.cat-header.open{border-radius:var(--rad) var(--rad) 0 0;border-bottom-color:transparent;}
+.cat-icon{font-size:18px;width:28px;text-align:center;flex-shrink:0;}
+.cat-name{font-size:14px;font-weight:700;flex:1;}
+.cat-count{font-size:12px;color:var(--tx3);}
+.cat-counts{display:flex;gap:6px;align-items:center;}
+.cat-arrow{font-size:11px;color:var(--tx3);transition:transform .2s;flex-shrink:0;}
+.cat-header.open .cat-arrow{transform:rotate(180deg);}
+.cat-body{display:none;border:1px solid var(--bdr);border-top:none;border-radius:0 0 var(--rad) var(--rad);overflow:hidden;}
+.cat-body.open{display:block;}
 
-  /* QR */
-  .qr-panel { max-width:520px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:2rem; }
-  .qr-box { width:200px;height:200px;border:2px dashed var(--border-md);border-radius:var(--radius-lg);margin:1.5rem auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;color:var(--text-3);font-size:13px;overflow:hidden;position:relative; }
-  .qr-box:hover { border-color:var(--green);color:var(--green); }
-  .scan-line { position:absolute;top:0;left:0;right:0;height:3px;background:var(--green);animation:scanAnim 1.8s ease-in-out infinite; }
-  @keyframes scanAnim { 0%{top:0} 50%{top:calc(100% - 3px)} 100%{top:0} }
-  .qr-result { background:var(--bg);border-radius:var(--radius);padding:1rem 1.25rem;margin:1rem 0; }
-  .result-row { display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px; }
-  .result-label { font-size:12px;color:var(--text-3); }
-  .result-value { font-size:13px;font-weight:600; }
-  .op-tabs { display:flex;gap:8px;margin:1rem 0; }
-  .op-tab { flex:1;padding:10px;border:1px solid var(--border-md);border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:500;text-align:center;color:var(--text-2);background:var(--bg); }
-  .op-tab.active { background:var(--green);border-color:var(--green);color:#fff; }
+/* Item rows inside category */
+.item-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:.7rem 1rem;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .12s;}
+.item-row:last-child{border-bottom:none;}
+.item-row:hover,.item-row:active{background:var(--gll);}
+.item-row.expanded{background:var(--gll);}
+.item-code{font-family:var(--mono);font-size:10px;color:var(--tx3);}
+.item-name{font-size:13px;font-weight:600;line-height:1.3;}
+.item-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+.qty-pill{font-size:13px;font-weight:700;color:var(--tx);}
 
-  /* SERVICE FORM */
-  .service-ref { background:var(--green-light);border-radius:var(--radius);padding:10px 14px;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between; }
-  .service-ref-label { font-size:12px;color:var(--green-dark); }
-  .service-ref-no { font-size:18px;font-weight:700;color:var(--green-dark);font-family:monospace; }
+/* Item expand detail */
+.item-expand{display:none;background:#F7FBF9;border-top:1px solid var(--bdr);padding:.9rem 1rem;}
+.item-expand.open{display:block;}
 
-  /* ADD UNITS BATCH */
-  .sn-row { display:flex;gap:8px;align-items:center;margin-bottom:6px; }
-  .sn-row input { flex:1;padding:7px 10px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:13px;font-family:monospace; }
-  .sn-row .detail-in { flex:1.5; }
+/* Unit cards inside expand */
+.units-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-top:.7rem;}
+.unit-card{background:#fff;border:1px solid var(--bdr);border-radius:var(--radsm);padding:.7rem .85rem;display:flex;gap:10px;align-items:flex-start;}
+.unit-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.dot-available{background:#1D9E75;}
+.dot-used{background:#aaa;}
+.dot-damaged{background:#E5A600;}
+.unit-info{flex:1;min-width:0;}
+.unit-sn{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--pu);background:var(--pul);padding:2px 7px;border-radius:4px;display:inline-block;margin-bottom:3px;}
+.unit-nosn{font-family:var(--mono);font-size:10px;color:var(--tx3);background:#F0F0F0;padding:2px 7px;border-radius:4px;display:inline-block;margin-bottom:3px;}
+.unit-detail{font-size:11px;color:var(--tx2);line-height:1.4;}
+.unit-note{font-size:11px;color:var(--am);margin-top:2px;}
+.unit-loc{font-size:11px;color:var(--tx3);}
+.unit-actions{display:flex;gap:4px;flex-shrink:0;}
 
-  /* PRINT */
-  @media print {
-    #mainApp,.topbar,.nav-tabs,.content { display:none!important; }
-    #printArea { display:block!important; }
-  }
-  #printArea { display:none; }
-  .print-doc { max-width:750px;margin:0 auto;padding:2rem;font-family:'Sarabun',sans-serif; }
-  .print-header { text-align:center;margin-bottom:1.5rem;border-bottom:2px solid #000;padding-bottom:1rem; }
-  .print-title { font-size:20px;font-weight:700;margin-bottom:4px; }
-  .print-meta { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:1rem 0; }
-  .print-meta-label { font-size:11px;color:#666; }
-  .print-meta-value { font-size:13px;font-weight:600; }
-  .print-table { width:100%;border-collapse:collapse;margin-top:1rem; }
-  .print-table th,.print-table td { border:1px solid #ccc;padding:8px 10px;font-size:13px; }
-  .print-table th { background:#f0f0f0;font-weight:700; }
-  .print-sign { display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-top:3rem; }
-  .sign-box { text-align:center; }
-  .sign-line { border-top:1px solid #000;margin-top:3rem;padding-top:6px;font-size:12px; }
+/* ══════════════════════════════════════
+   BADGES
+══════════════════════════════════════ */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;line-height:1.4;}
+.badge-ok{background:var(--gl);color:var(--gd);}
+.badge-low{background:var(--aml);color:var(--am);}
+.badge-out{background:var(--rl);color:var(--r);}
+.badge-in{background:var(--gl);color:var(--gd);}
+.badge-out2{background:var(--rl);color:var(--r);}
+.badge-avail{background:var(--gl);color:var(--gd);}
+.badge-used2{background:#F0F0F0;color:#777;}
+.badge-dmg{background:var(--aml);color:var(--am);}
+.badge-sn{background:var(--pul);color:var(--pu);font-family:var(--mono);}
 
-  /* NOTIF */
-  #notif { position:fixed;bottom:24px;right:24px;background:var(--green);color:#fff;padding:12px 20px;border-radius:var(--radius);font-size:13px;font-weight:500;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none; }
-  #notif.show { opacity:1; }
-  #notif.error { background:var(--red); }
+/* ══════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════ */
+.btn{padding:7px 13px;border-radius:var(--rad);font-size:13px;cursor:pointer;border:1px solid var(--bdrm);background:var(--surf);color:var(--tx2);display:inline-flex;align-items:center;gap:5px;font-family:var(--font);line-height:1;transition:background .12s;}
+.btn:hover{background:var(--bg);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-primary{background:var(--g);color:#fff;border-color:var(--g);}
+.btn-primary:hover{background:var(--gd);}
+.btn-danger{background:var(--rl);color:var(--r);border-color:#F0A0A0;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-icon{padding:5px 7px;border-radius:var(--radsm);}
+.btn-full{width:100%;justify-content:center;}
 
-  /* LOADING */
-  #loadingScreen { position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999; }
-  .spinner { width:40px;height:40px;border:3px solid var(--green-light);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+/* ══════════════════════════════════════
+   FORM
+══════════════════════════════════════ */
+.field{margin-bottom:.85rem;}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--tx2);margin-bottom:4px;letter-spacing:.3px;}
+.field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--bdrm);border-radius:var(--rad);font-size:13px;font-family:var(--font);background:var(--surf);color:var(--tx);}
+.field textarea{resize:vertical;min-height:64px;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--g);box-shadow:0 0 0 3px rgba(29,158,117,.12);}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:480px){.grid-2{grid-template-columns:1fr;}}
 
-  /* UTILS */
-  .search-bar { display:flex;gap:8px;align-items:center; }
-  .search-input { padding:7px 12px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:13px;width:220px;background:var(--surface); }
-  .bar-bg { background:#E5E7EB;border-radius:4px;height:7px; }
-  .bar-fill { background:var(--green);height:7px;border-radius:4px;transition:width .4s; }
-  .section-gap { margin-bottom:1.5rem; }
-  .flex { display:flex; } .gap8 { gap:8px; } .items-center { align-items:center; } .justify-between { justify-content:space-between; }
-  .text-sm { font-size:12px; } .text-muted { color:var(--text-3); } .mono { font-family:monospace; } .fw600 { font-weight:600; }
-  .expand-row td { background:#FAFCFF!important; }
-  .expand-panel { padding:12px 14px;background:#F7F9FE;border-bottom:1px solid var(--border); }
+/* ══════════════════════════════════════
+   MODAL
+══════════════════════════════════════ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:300;}
+@media(min-width:600px){.modal-overlay{align-items:center;}}
+.modal{background:var(--surf);border-radius:20px 20px 0 0;padding:1.5rem;width:100%;max-width:100vw;max-height:92vh;overflow-y:auto;}
+@media(min-width:600px){.modal{border-radius:var(--radlg);width:540px;max-height:88vh;}}
+.modal-lg{max-width:100vw;}
+@media(min-width:700px){.modal-lg{width:680px;}}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:1.1rem;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--bdr);}
+.modal-handle{width:36px;height:4px;background:var(--bdrm);border-radius:4px;margin:0 auto 1rem;}
 
-  /* Unit selector in withdraw */
-  .unit-picker { border:1px solid var(--border-md);border-radius:var(--radius);overflow:hidden;margin-top:8px; }
-  .unit-pick-row { display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer; }
-  .unit-pick-row:last-child { border-bottom:none; }
-  .unit-pick-row:hover { background:var(--bg); }
-  .unit-pick-row.selected { background:var(--green-light); }
-  .unit-pick-cb { width:16px;height:16px;flex-shrink:0; }
+/* ══════════════════════════════════════
+   QR PANEL
+══════════════════════════════════════ */
+.qr-wrap{max-width:480px;margin:0 auto;}
+.qr-box{width:180px;height:180px;border:2px dashed var(--bdrm);border-radius:var(--radlg);margin:1.2rem auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:var(--tx3);font-size:12px;position:relative;overflow:hidden;transition:border-color .2s;}
+.qr-box:hover{border-color:var(--g);color:var(--g);}
+.scan-line{position:absolute;top:0;left:0;right:0;height:3px;background:var(--g);animation:scanAnim 1.8s ease-in-out infinite;}
+@keyframes scanAnim{0%{top:0}50%{top:calc(100% - 3px)}100%{top:0}}
+.qr-result{background:var(--bg);border-radius:var(--rad);padding:.9rem 1rem;margin:.9rem 0;}
+.res-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+.res-lbl{font-size:11px;color:var(--tx3);}
+.res-val{font-size:13px;font-weight:600;}
+.op-tabs{display:flex;gap:8px;margin:.9rem 0;}
+.op-tab{flex:1;padding:10px;border:1px solid var(--bdrm);border-radius:var(--rad);cursor:pointer;font-size:13px;font-weight:600;text-align:center;color:var(--tx2);background:var(--bg);font-family:var(--font);}
+.op-tab.active{background:var(--g);border-color:var(--g);color:#fff;}
 
-  /* Role select */
-  .role-select { padding:5px 10px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:12px;font-family:var(--font);background:var(--surface);cursor:pointer; }
-  .user-row-avatar { width:32px;height:32px;border-radius:50%;object-fit:cover;background:var(--green-light);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--green-dark);flex-shrink:0;vertical-align:middle; }
+/* ══════════════════════════════════════
+   WITHDRAW
+══════════════════════════════════════ */
+.service-ref{background:var(--gl);border-radius:var(--rad);padding:.7rem 1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;}
+.service-ref-no{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--gd);}
+.service-ref-lbl{font-size:11px;color:var(--gd);}
 
-  /* History dot */
-  .hist-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+/* Unit picker */
+.unit-picker{border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden;max-height:260px;overflow-y:auto;}
+.unit-pick-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;}
+.unit-pick-row:last-child{border-bottom:none;}
+.unit-pick-row.selected{background:var(--gll);}
+.upick-cb{width:17px;height:17px;flex-shrink:0;cursor:pointer;}
 
-  /* Tab badge */
-  .tab-badge { background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center; }
+/* SN input rows */
+.sn-row{display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px;}
+@media(max-width:520px){.sn-row{grid-template-columns:1fr 1fr;gap:6px;}}
+.sn-row input{padding:7px 9px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--mono);width:100%;}
+@media(max-width:520px){.sn-row input:nth-child(3){display:none;}}
+
+/* Withdraw list table on mobile → cards */
+.wd-list{display:flex;flex-direction:column;gap:6px;}
+.wd-item{background:var(--bg);border-radius:var(--rad);padding:.7rem .9rem;display:flex;align-items:center;gap:10px;}
+.wd-item-info{flex:1;min-width:0;}
+.wd-item-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wd-item-meta{font-size:11px;color:var(--tx3);}
+
+/* Withdraw summary sticky on mobile */
+.wd-summary-sticky{position:sticky;bottom:calc(var(--nav-h) + 8px);background:var(--surf);border:1px solid var(--bdr);border-radius:var(--radlg);padding:.9rem 1rem;box-shadow:0 -4px 20px rgba(0,0,0,.07);margin-top:.9rem;}
+@media(min-width:768px){.wd-summary-sticky{position:static;box-shadow:none;}}
+
+/* ══════════════════════════════════════
+   HISTORY - mobile cards
+══════════════════════════════════════ */
+.hist-list{display:flex;flex-direction:column;gap:8px;}
+.hist-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rad);padding:.8rem 1rem;}
+.hist-top{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.hist-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.hist-item{font-size:13px;font-weight:600;}
+.hist-sn{font-family:var(--mono);font-size:11px;color:var(--pu);}
+.hist-meta{font-size:11px;color:var(--tx3);line-height:1.6;}
+.hist-ref{font-family:var(--mono);font-size:10px;color:var(--tx3);}
+
+/* ══════════════════════════════════════
+   SEARCH BAR
+══════════════════════════════════════ */
+.search-bar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.search-input{padding:8px 11px;border:1px solid var(--bdrm);border-radius:var(--rad);font-size:13px;flex:1;min-width:160px;background:var(--surf);font-family:var(--font);}
+.search-input:focus{outline:none;border-color:var(--g);}
+
+/* ══════════════════════════════════════
+   PRINT
+══════════════════════════════════════ */
+@media print{
+  #mainApp,.topbar,.nav-tabs,.content,.bottom-nav{display:none!important;}
+  #printArea{display:block!important;}
+}
+#printArea{display:none;}
+.print-doc{max-width:750px;margin:0 auto;padding:2rem;font-family:'Sarabun',sans-serif;}
+.print-header{text-align:center;margin-bottom:1.5rem;border-bottom:2px solid #000;padding-bottom:1rem;}
+.print-title{font-size:20px;font-weight:700;}
+.print-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:1rem 0;}
+.pm-lbl{font-size:11px;color:#666;}
+.pm-val{font-size:13px;font-weight:600;}
+.print-table{width:100%;border-collapse:collapse;margin-top:1rem;}
+.print-table th,.print-table td{border:1px solid #ccc;padding:7px 9px;font-size:12px;}
+.print-table th{background:#f0f0f0;font-weight:700;}
+.print-sign{display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-top:3rem;}
+.sign-box{text-align:center;}
+.sign-line{border-top:1px solid #000;margin-top:3rem;padding-top:6px;font-size:12px;}
+
+/* ══════════════════════════════════════
+   NOTIF
+══════════════════════════════════════ */
+#notif{position:fixed;bottom:calc(var(--nav-h) + 12px);left:50%;transform:translateX(-50%);background:var(--g);color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.2);}
+#notif.show{opacity:1;}
+#notif.error{background:var(--r);}
+@media(min-width:768px){#notif{bottom:24px;}}
+
+/* ══════════════════════════════════════
+   UTILS
+══════════════════════════════════════ */
+.flex{display:flex;} .gap8{gap:8px;} .items-c{align-items:center;} .jb{justify-content:space-between;}
+.mono{font-family:var(--mono);} .fw7{font-weight:700;} .fz12{font-size:12px;} .fz11{font-size:11px;}
+.txm{color:var(--tx2);} .txmute{color:var(--tx3);}
+.bar-bg{background:#E5E7EB;border-radius:4px;height:6px;}
+.bar-fill{background:var(--g);height:6px;border-radius:4px;transition:width .4s;}
+.empty-state{text-align:center;padding:2.5rem 1rem;color:var(--tx3);font-size:13px;}
+.info-box{background:var(--bl);border-radius:var(--rad);padding:.75rem 1rem;font-size:12px;color:var(--b);margin:.7rem 0;}
+
+/* Dashboard 2-col grid */
+.dash-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem;}
+@media(min-width:640px){.dash-grid{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
 
+<!-- LOADING -->
 <div id="loadingScreen">
-  <div style="width:48px;height:48px;background:var(--green);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:1rem;">📦</div>
-  <div style="font-size:16px;font-weight:600;margin-bottom:1rem;">RYG Stock System</div>
+  <div class="logo-box" style="width:52px;height:52px;font-size:26px;border-radius:14px;">📦</div>
+  <div style="font-size:15px;font-weight:700;">RYG Stock System</div>
   <div class="spinner"></div>
 </div>
 
-<div id="loginScreen" style="display:none;">
+<!-- LOGIN -->
+<div id="loginScreen">
   <div class="login-card">
     <div class="login-logo">
-      <div class="logo-icon">📦</div>
-      <div><h1 style="font-size:20px;font-weight:700">RYG Stock System</h1><p style="font-size:13px;color:var(--text-2)">ระบบจัดการสต็อก Spare Part</p></div>
+      <div class="logo-box">📦</div>
+      <div><h1>RYG Stock</h1><p>ระบบจัดการ Spare Part</p></div>
     </div>
     <button class="btn-google" onclick="signInGoogle()">
-      <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
       เข้าสู่ระบบด้วย Google
     </button>
-    <div class="login-note">ระบบจะตรวจสอบสิทธิ์จาก Email ที่กำหนดไว้ใน Firestore</div>
+    <div class="login-note">ระบบตรวจสอบสิทธิ์จาก Firestore<br>ต้องได้รับการอนุมัติจากผู้ดูแลระบบ</div>
   </div>
 </div>
 
+<!-- MAIN APP -->
 <div id="mainApp">
   <div class="topbar">
-    <div class="topbar-left">
-      <div class="topbar-logo">📦</div>
-      <span class="topbar-title">RYG Stock System</span>
-    </div>
-    <div class="topbar-right">
-      <div class="user-chip">
-        <img id="userAvatar" class="user-avatar" src="" onerror="this.style.display='none'" alt=""/>
-        <span id="userAvatarFallback" class="user-avatar"></span>
-        <span id="userDisplayName" style="font-size:13px;font-weight:500"></span>
-      </div>
-      <span id="roleLabel" class="badge-role badge-admin">Admin</span>
-      <button class="btn-logout" onclick="doLogout()">ออกจากระบบ</button>
+    <div class="topbar-logo">📦</div>
+    <span class="topbar-title">RYG Stock</span>
+    <div class="user-mini">
+      <img id="uAvatar" class="user-ava" src="" onerror="this.style.display='none'" alt=""/>
+      <span id="uFallback" class="user-ava"></span>
+      <span id="uName" class="user-name-top"></span>
+      <span id="uRole" class="badge-role badge-admin"></span>
+      <button class="btn-topout" onclick="doLogout()">ออก</button>
     </div>
   </div>
   <div class="nav-tabs" id="navTabs"></div>
-  <div class="content" id="mainContent"><div style="text-align:center;padding:3rem;color:var(--text-3)">กำลังโหลด...</div></div>
+  <div class="content" id="mainContent"></div>
+  <nav class="bottom-nav" id="bottomNav"></nav>
 </div>
 
 <div id="printArea"></div>
 <div id="notif"></div>
 
 <script>
-// ============================================================
-// FIREBASE CONFIG
-// ============================================================
+// ═══════════════════════════════════════════════════
+// FIREBASE
+// ═══════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyABKbRCDNh5SHwvbuFtAudLnRYepZfXk7s",
-  authDomain: "ryg-stock.firebaseapp.com",
-  projectId: "ryg-stock",
-  storageBucket: "ryg-stock.firebasestorage.app",
-  messagingSenderId: "338213551131",
-  appId: "1:338213551131:web:153773df4f8111b2364cbe"
+  apiKey:"AIzaSyABKbRCDNh5SHwvbuFtAudLnRYepZfXk7s",
+  authDomain:"ryg-stock.firebaseapp.com",
+  projectId:"ryg-stock",
+  storageBucket:"ryg-stock.firebasestorage.app",
+  messagingSenderId:"338213551131",
+  appId:"1:338213551131:web:153773df4f8111b2364cbe"
 };
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+const auth = firebase.auth(), db = firebase.firestore();
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // STATE
-// ============================================================
-let currentUser = null, currentRole = 'user', currentTab = 'dashboard';
-let allItems = [];        // item definitions (SP001..SP049)
-let allUnits = [];        // individual unit records
-let historyData = [];
-let historyUnsub = null;
-let searchQ = '';
-let expandedItem = null;
-let withdrawUnits = [];   // { unitId, itemId, itemName, sn, detail }
-let currentServiceNo = '';
-let scanStep = 0, scannedItem = null, scanOp = 'out';
+// ═══════════════════════════════════════════════════
+let currentUser=null, currentRole='user', currentTab='dashboard';
+let allItems=[], allUnits=[], historyData=[];
+let historyUnsub=null;
+let searchQ='', expandedItem=null;
+let withdrawUnits=[], currentServiceNo='';
+let scanStep=0, scannedItem=null, scanOp='out';
+let qrSelectedUnits=[];
+let pendingUnits=[];
+let openCats={};   // which categories are expanded
 
-// ============================================================
-// TAB CONFIG
-// ============================================================
-const TABS_ADMIN = [
-  { id:'dashboard', icon:'📊', label:'Dashboard' },
-  { id:'stock',     icon:'📦', label:'สต็อกสินค้า' },
-  { id:'qr',        icon:'📷', label:'สแกน QR' },
-  { id:'withdraw',  icon:'📤', label:'เบิกสินค้า' },
-  { id:'history',   icon:'🕐', label:'ประวัติ' },
-  { id:'users',     icon:'👥', label:'ผู้ใช้งาน' },
+// ═══════════════════════════════════════════════════
+// CATEGORY DEFINITIONS  (กำหนดกลุ่มหลัก)
+// ═══════════════════════════════════════════════════
+const CAT_GROUPS = [
+  { key:'Storage',  label:'Storage',           icon:'💾', cats:['Storage'] },
+  { key:'Memory',   label:'Memory / RAM',       icon:'🧩', cats:['Memory'] },
+  { key:'Network',  label:'Network / Switch',   icon:'🌐', cats:['Network'] },
+  { key:'Component',label:'Component / Power',  icon:'⚡', cats:['Component','Power'] },
+  { key:'Cable',    label:'Cable / Connector',  icon:'🔌', cats:['Cable'] },
+  { key:'Device',   label:'Device / Camera',    icon:'🖥️', cats:['Device','Camera'] },
+  { key:'Other',    label:'อื่นๆ',              icon:'📦', cats:['Other'] },
 ];
-const TABS_USER = [
-  { id:'dashboard', icon:'📊', label:'Dashboard' },
-  { id:'qr',        icon:'📷', label:'สแกน QR' },
-  { id:'history',   icon:'🕐', label:'ประวัติ' },
-];
-const getTabList = () => currentRole === 'admin' ? TABS_ADMIN : TABS_USER;
 
-function renderNavTabs() {
-  document.getElementById('navTabs').innerHTML = getTabList().map(t => `
-    <div class="nav-tab ${currentTab===t.id?'active':''}" onclick="showTab('${t.id}')">
-      ${t.icon} ${t.label}
+function getGroupKey(cat) {
+  const g = CAT_GROUPS.find(g => g.cats.includes(cat));
+  return g ? g.key : 'Other';
+}
+function getGroupDef(key) {
+  return CAT_GROUPS.find(g => g.key === key) || CAT_GROUPS[CAT_GROUPS.length-1];
+}
+
+// ═══════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════
+const TABS_ADMIN=[
+  {id:'dashboard',icon:'📊',label:'Dashboard'},
+  {id:'stock',    icon:'📦',label:'สต็อก'},
+  {id:'qr',       icon:'📷',label:'QR'},
+  {id:'withdraw', icon:'📤',label:'เบิก'},
+  {id:'history',  icon:'🕐',label:'ประวัติ'},
+  {id:'users',    icon:'👥',label:'ผู้ใช้'},
+];
+const TABS_USER=[
+  {id:'dashboard',icon:'📊',label:'Dashboard'},
+  {id:'qr',       icon:'📷',label:'QR'},
+  {id:'history',  icon:'🕐',label:'ประวัติ'},
+];
+const getTabs=()=>currentRole==='admin'?TABS_ADMIN:TABS_USER;
+
+function renderNav(){
+  const tabs=getTabs();
+  document.getElementById('navTabs').innerHTML=tabs.map(t=>`
+    <div class="nav-tab ${currentTab===t.id?'active':''}" onclick="showTab('${t.id}')">${t.icon} ${t.label}</div>`).join('');
+  document.getElementById('bottomNav').innerHTML=tabs.map(t=>`
+    <div class="bnav-item ${currentTab===t.id?'active':''}" onclick="showTab('${t.id}')">
+      <div class="ico">${t.icon}</div><div>${t.label}</div>
     </div>`).join('');
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // AUTH
-// ============================================================
-auth.onAuthStateChanged(async (user) => {
-  document.getElementById('loadingScreen').style.display = 'none';
-  if (!user) {
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('mainApp').style.display = 'none';
+// ═══════════════════════════════════════════════════
+auth.onAuthStateChanged(async user=>{
+  document.getElementById('loadingScreen').style.display='none';
+  if(!user){
+    document.getElementById('loginScreen').style.display='flex';
+    document.getElementById('mainApp').style.display='none';
     return;
   }
-  currentUser = user;
+  currentUser=user;
   await loadUserRole(user);
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'flex';
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('mainApp').style.display='flex';
   updateUserUI();
-  await loadItems();
-  await loadUnits();
+  await loadItems(); await loadUnits();
   showTab('dashboard');
   subscribeHistory();
 });
 
-async function loadUserRole(user) {
-  try {
-    const doc = await db.collection('users').doc(user.uid).get();
-    if (doc.exists) {
-      currentRole = doc.data().role || 'user';
-    } else {
+async function loadUserRole(user){
+  try{
+    const doc=await db.collection('users').doc(user.uid).get();
+    if(doc.exists){currentRole=doc.data().role||'user';}
+    else{
       await db.collection('users').doc(user.uid).set({
-        email: user.email, displayName: user.displayName, photoURL: user.photoURL||'',
-        role: 'user', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        email:user.email,displayName:user.displayName,photoURL:user.photoURL||'',
+        role:'user',createdAt:firebase.firestore.FieldValue.serverTimestamp()
       });
-      currentRole = 'user';
+      currentRole='user';
     }
-  } catch(e) { currentRole = 'user'; }
+  }catch(e){currentRole='user';}
 }
 
-function updateUserUI() {
-  document.getElementById('userDisplayName').textContent = currentUser.displayName || currentUser.email;
-  const avatar = document.getElementById('userAvatar');
-  const fallback = document.getElementById('userAvatarFallback');
-  if (currentUser.photoURL) { avatar.src = currentUser.photoURL; avatar.style.display=''; fallback.style.display='none'; }
-  else { avatar.style.display='none'; fallback.style.display=''; fallback.textContent=(currentUser.displayName||currentUser.email||'U')[0].toUpperCase(); }
-  const rl = document.getElementById('roleLabel');
-  rl.textContent = currentRole==='admin'?'Admin':'User';
-  rl.className = 'badge-role '+(currentRole==='admin'?'badge-admin':'badge-user');
+function updateUserUI(){
+  const n=currentUser.displayName||currentUser.email||'U';
+  document.getElementById('uName').textContent=n.split(' ')[0];
+  const av=document.getElementById('uAvatar'),fb=document.getElementById('uFallback');
+  if(currentUser.photoURL){av.src=currentUser.photoURL;av.style.display='';fb.style.display='none';}
+  else{av.style.display='none';fb.style.display='';fb.textContent=n[0].toUpperCase();}
+  const rl=document.getElementById('uRole');
+  rl.textContent=currentRole==='admin'?'Admin':'User';
+  rl.className='badge-role '+(currentRole==='admin'?'badge-admin':'badge-user');
 }
+function signInGoogle(){auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>showNotif(e.message,'error'));}
+function doLogout(){auth.signOut();}
 
-function signInGoogle() {
-  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>showNotif(e.message,'error'));
+// ═══════════════════════════════════════════════════
+// FIRESTORE — ITEMS
+// ═══════════════════════════════════════════════════
+async function loadItems(){
+  const snap=await db.collection('items').orderBy('id').get();
+  allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
+  if(!allItems.length) await seedItems();
 }
-function doLogout() { auth.signOut(); }
-
-// ============================================================
-// FIRESTORE — ITEMS (definitions)
-// ============================================================
-async function loadItems() {
-  const snap = await db.collection('items').orderBy('id').get();
-  allItems = snap.docs.map(d => ({ docId:d.id, ...d.data() }));
-  if (allItems.length === 0) await seedItems();
-}
-
-async function seedItems() {
-  const seed = [
-    {id:'SP001',name:'SSD (128GB)',min:2,loc:'ชั้นเก็บของ IT',cat:'Storage'},
-    {id:'SP002',name:'SSD (240GB)',min:2,loc:'ชั้นเก็บของ IT',cat:'Storage'},
-    {id:'SP003',name:'HDD 320GB',min:1,loc:'ชั้นเก็บของ IT',cat:'Storage'},
-    {id:'SP004',name:'HDD 500GB',min:3,loc:'ชั้นเก็บของ IT',cat:'Storage'},
-    {id:'SP005',name:'HDD 1TB',min:3,loc:'ชั้นเก็บของ IT',cat:'Storage'},
-    {id:'SP006',name:'HDD 2TB',min:1,loc:'ชั้นเก็บของ IT',cat:'Storage'},
-    {id:'SP007',name:'RAM PC3 8GB',min:2,loc:'ชั้นเก็บของ IT',cat:'Memory'},
-    {id:'SP008',name:'RAM PC3 4GB',min:3,loc:'ชั้นเก็บของ IT',cat:'Memory'},
-    {id:'SP009',name:'RAM PC3 2GB',min:2,loc:'ชั้นเก็บของ IT',cat:'Memory'},
-    {id:'SP010',name:'RAM PC4 4GB',min:2,loc:'ชั้นเก็บของ IT',cat:'Memory'},
-    {id:'SP011',name:'CPU',min:3,loc:'ชั้นเก็บของ IT',cat:'Component'},
-    {id:'SP012',name:'GPU',min:2,loc:'ชั้นเก็บของ IT',cat:'Component'},
-    {id:'SP013',name:'PCI USB Card 4 Port',min:1,loc:'ชั้นเก็บของ IT',cat:'Component'},
-    {id:'SP014',name:'PCI USB Card 2 Port',min:2,loc:'ชั้นเก็บของ IT',cat:'Component'},
-    {id:'SP015',name:'PCI Network Adapter',min:2,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP016',name:'Power Supply 550W Bronze',min:1,loc:'ชั้นเก็บของ IT',cat:'Component'},
-    {id:'SP017',name:'Power Supply DELL 240V',min:1,loc:'ชั้นเก็บของ IT',cat:'Component'},
-    {id:'SP018',name:'Switch ZYXEL 16 Port',min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP019',name:'Switch ZYXEL 24 Port',min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP020',name:'Switch Aruba 24G 4SFP',min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP021',name:'Switch D-Link 8 Port',min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP022',name:'Switch D-Link 16 Port',min:2,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP023',name:'Switch D-Link 24 Port',min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP024',name:'Switch Dahua POE 8-Port',min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
-    {id:'SP025',name:'กล้อง Dahua IP Camera',min:1,loc:'ชั้นเก็บของ IT',cat:'Camera'},
-    {id:'SP026',name:'กล้อง Starcam IP Camera',min:1,loc:'ชั้นเก็บของ IT',cat:'Camera'},
-    {id:'SP027',name:'VGA to HDMI',min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP028',name:'HDMI to VGA',min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP029',name:'DisplayPort to HDMI',min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP030',name:'DisplayPort to VGA',min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP031',name:'สาย AC Power',min:5,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP032',name:'สาย VGA',min:5,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP033',name:'สาย DisplayPort',min:2,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP034',name:'สาย HDMI',min:3,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP035',name:'สาย Printer USB',min:3,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP036',name:'สายแลน OUTDOOR CAT6',min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP037',name:'สายแลน OUTDOOR Sling CAT6',min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP038',name:'หัวสายแลน CAT6 RJ45',min:5,loc:'ชั้นเก็บของ IT',cat:'Cable'},
-    {id:'SP039',name:'Adapter 12V 2A',min:2,loc:'ชั้นเก็บของ IT',cat:'Power'},
-    {id:'SP040',name:'Switching Power Supply 5A',min:1,loc:'ชั้นเก็บของ IT',cat:'Power'},
-    {id:'SP041',name:'Switching Power Supply 20A',min:1,loc:'ชั้นเก็บของ IT',cat:'Power'},
-    {id:'SP042',name:'Switching Power Supply 10A',min:1,loc:'ชั้นเก็บของ IT',cat:'Power'},
-    {id:'SP043',name:'Monitor',min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
-    {id:'SP044',name:'Computer',min:1,loc:'ชั้นเก็บของ IT',cat:'Device'},
-    {id:'SP045',name:'Keyboard',min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
-    {id:'SP046',name:'Mouse',min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
-    {id:'SP047',name:'Webcam',min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
-    {id:'SP048',name:'ลำโพงเล็กสีดำ',min:1,loc:'ชั้นเก็บของ IT',cat:'Device'},
-    {id:'SP049',name:'Printer',min:1,loc:'ชั้นเก็บของ IT',cat:'Device'},
+async function seedItems(){
+  const seed=[
+    {id:'SP001',name:'SSD 128GB',min:2,loc:'ชั้น IT',cat:'Storage'},
+    {id:'SP002',name:'SSD 240GB',min:2,loc:'ชั้น IT',cat:'Storage'},
+    {id:'SP003',name:'HDD 320GB',min:1,loc:'ชั้น IT',cat:'Storage'},
+    {id:'SP004',name:'HDD 500GB',min:3,loc:'ชั้น IT',cat:'Storage'},
+    {id:'SP005',name:'HDD 1TB',min:3,loc:'ชั้น IT',cat:'Storage'},
+    {id:'SP006',name:'HDD 2TB',min:1,loc:'ชั้น IT',cat:'Storage'},
+    {id:'SP007',name:'RAM PC3 8GB',min:2,loc:'ชั้น IT',cat:'Memory'},
+    {id:'SP008',name:'RAM PC3 4GB',min:3,loc:'ชั้น IT',cat:'Memory'},
+    {id:'SP009',name:'RAM PC3 2GB',min:2,loc:'ชั้น IT',cat:'Memory'},
+    {id:'SP010',name:'RAM PC4 4GB',min:2,loc:'ชั้น IT',cat:'Memory'},
+    {id:'SP011',name:'CPU',min:3,loc:'ชั้น IT',cat:'Component'},
+    {id:'SP012',name:'GPU',min:2,loc:'ชั้น IT',cat:'Component'},
+    {id:'SP013',name:'PCI USB Card 4 Port',min:1,loc:'ชั้น IT',cat:'Component'},
+    {id:'SP014',name:'PCI USB Card 2 Port',min:2,loc:'ชั้น IT',cat:'Component'},
+    {id:'SP015',name:'PCI Network Adapter',min:2,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP016',name:'Power Supply 550W Bronze',min:1,loc:'ชั้น IT',cat:'Component'},
+    {id:'SP017',name:'Power Supply DELL 240V',min:1,loc:'ชั้น IT',cat:'Component'},
+    {id:'SP018',name:'Switch ZYXEL 16 Port',min:1,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP019',name:'Switch ZYXEL 24 Port',min:1,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP020',name:'Switch Aruba 24G 4SFP',min:1,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP021',name:'Switch D-Link 8 Port',min:1,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP022',name:'Switch D-Link 16 Port',min:2,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP023',name:'Switch D-Link 24 Port',min:1,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP024',name:'Switch Dahua POE 8-Port',min:1,loc:'ชั้น IT',cat:'Network'},
+    {id:'SP025',name:'Dahua IP Camera',min:1,loc:'ชั้น IT',cat:'Camera'},
+    {id:'SP026',name:'Starcam IP Camera',min:1,loc:'ชั้น IT',cat:'Camera'},
+    {id:'SP027',name:'VGA to HDMI',min:1,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP028',name:'HDMI to VGA',min:1,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP029',name:'DisplayPort to HDMI',min:1,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP030',name:'DisplayPort to VGA',min:1,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP031',name:'สาย AC Power',min:5,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP032',name:'สาย VGA',min:5,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP033',name:'สาย DisplayPort',min:2,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP034',name:'สาย HDMI',min:3,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP035',name:'สาย Printer USB',min:3,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP036',name:'สายแลน OUTDOOR CAT6',min:1,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP037',name:'สายแลน OUTDOOR Sling CAT6',min:1,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP038',name:'หัวสายแลน CAT6 RJ45',min:5,loc:'ชั้น IT',cat:'Cable'},
+    {id:'SP039',name:'Adapter 12V 2A',min:2,loc:'ชั้น IT',cat:'Power'},
+    {id:'SP040',name:'Switching PSU 5A',min:1,loc:'ชั้น IT',cat:'Power'},
+    {id:'SP041',name:'Switching PSU 20A',min:1,loc:'ชั้น IT',cat:'Power'},
+    {id:'SP042',name:'Switching PSU 10A',min:1,loc:'ชั้น IT',cat:'Power'},
+    {id:'SP043',name:'Monitor',min:2,loc:'ชั้น IT',cat:'Device'},
+    {id:'SP044',name:'Computer',min:1,loc:'ชั้น IT',cat:'Device'},
+    {id:'SP045',name:'Keyboard',min:2,loc:'ชั้น IT',cat:'Device'},
+    {id:'SP046',name:'Mouse',min:2,loc:'ชั้น IT',cat:'Device'},
+    {id:'SP047',name:'Webcam',min:2,loc:'ชั้น IT',cat:'Device'},
+    {id:'SP048',name:'ลำโพงเล็กสีดำ',min:1,loc:'ชั้น IT',cat:'Device'},
+    {id:'SP049',name:'Printer',min:1,loc:'ชั้น IT',cat:'Device'},
   ];
-  const batch = db.batch();
-  seed.forEach(item => batch.set(db.collection('items').doc(item.id), item));
-  await batch.commit();
-  await loadItems();
+  const batch=db.batch();
+  seed.forEach(i=>batch.set(db.collection('items').doc(i.id),i));
+  await batch.commit(); await loadItems();
 }
 
-// ============================================================
-// FIRESTORE — UNITS (individual pieces)
-// ============================================================
-// unit document structure:
-// { itemId, sn:'', detail:'', status:'available'|'used'|'damaged',
-//   addedAt, addedBy, usedAt(timestamp), usedBy, usedTxId, note }
-async function loadUnits() {
-  const snap = await db.collection('units').get();
-  allUnits = snap.docs.map(d => ({ docId:d.id, ...d.data() }));
+// ═══════════════════════════════════════════════════
+// FIRESTORE — UNITS
+// ═══════════════════════════════════════════════════
+async function loadUnits(){
+  const snap=await db.collection('units').get();
+  allUnits=snap.docs.map(d=>({docId:d.id,...d.data()}));
 }
+const getUnitsOf=id=>allUnits.filter(u=>u.itemId===id);
+const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
+const getItemQty=id=>getAvail(id).length;
 
-function getUnitsOf(itemId) { return allUnits.filter(u => u.itemId === itemId); }
-function getAvailableUnits(itemId) { return getUnitsOf(itemId).filter(u => u.status === 'available'); }
-function getItemQty(itemId) { return getAvailableUnits(itemId).length; }
-
-// ============================================================
+// ═══════════════════════════════════════════════════
 // HISTORY
-// ============================================================
-function subscribeHistory() {
-  if (historyUnsub) historyUnsub();
-  historyUnsub = db.collection('transactions').orderBy('createdAt','desc').limit(200)
-    .onSnapshot(snap => {
-      historyData = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-      if (currentTab==='history') renderHistoryTab();
-      if (currentTab==='dashboard') renderDashboardTab();
+// ═══════════════════════════════════════════════════
+function subscribeHistory(){
+  if(historyUnsub)historyUnsub();
+  historyUnsub=db.collection('transactions').orderBy('createdAt','desc').limit(200)
+    .onSnapshot(snap=>{
+      historyData=snap.docs.map(d=>({id:d.id,...d.data()}));
+      if(currentTab==='history')renderHistoryTab();
+      if(currentTab==='dashboard')renderDashboardTab();
     });
 }
 
-// ============================================================
-// TAB ROUTING
-// ============================================================
-function showTab(tab) {
-  const allowed = getTabList().map(t => t.id);
-  if (!allowed.includes(tab)) tab = 'dashboard';
-  currentTab = tab;
-  renderNavTabs();
-  if (tab==='dashboard') renderDashboardTab();
-  else if (tab==='stock')    renderStockTab();
-  else if (tab==='qr')       renderQRTab();
-  else if (tab==='withdraw') renderWithdrawTab();
-  else if (tab==='history')  renderHistoryTab();
-  else if (tab==='users')    renderUsersTab();
+// ═══════════════════════════════════════════════════
+// TAB ROUTER
+// ═══════════════════════════════════════════════════
+function showTab(tab){
+  const a=getTabs().map(t=>t.id);
+  if(!a.includes(tab))tab='dashboard';
+  currentTab=tab; renderNav();
+  if(tab==='dashboard') renderDashboardTab();
+  else if(tab==='stock')    renderStockTab();
+  else if(tab==='qr')       renderQRTab();
+  else if(tab==='withdraw') renderWithdrawTab();
+  else if(tab==='history')  renderHistoryTab();
+  else if(tab==='users')    renderUsersTab();
+  window.scrollTo(0,0);
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // HELPERS
-// ============================================================
-function getStatus(itemId) {
-  const qty = getItemQty(itemId);
-  const item = allItems.find(i => i.id === itemId);
-  if (!item) return 'ok';
-  if (qty <= 0) return 'out';
-  if (qty <= item.min) return 'low';
-  return 'ok';
+// ═══════════════════════════════════════════════════
+function getStatus(id){
+  const q=getItemQty(id),item=allItems.find(i=>i.id===id);
+  if(!item)return'ok';
+  if(q<=0)return'out';
+  if(q<=item.min)return'low';
+  return'ok';
 }
-function statusBadge(itemId) {
-  const s = getStatus(itemId);
-  if (s==='out') return '<span class="badge badge-out">หมดสต็อก</span>';
-  if (s==='low') return '<span class="badge badge-low">ใกล้หมด</span>';
-  return '<span class="badge badge-ok">ปกติ</span>';
+function statusBadge(id){
+  const s=getStatus(id);
+  if(s==='out')return'<span class="badge badge-out">หมดสต็อก</span>';
+  if(s==='low')return'<span class="badge badge-low">ใกล้หมด</span>';
+  return'<span class="badge badge-ok">ปกติ</span>';
 }
-function formatDT(ts) {
-  if (!ts) return '-';
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
+function snBadge(u){
+  return u.sn?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`;
+}
+function unitStatBadge(s){
+  if(s==='used')return'<span class="badge badge-used2">เบิกแล้ว</span>';
+  if(s==='damaged')return'<span class="badge badge-dmg">ชำรุด</span>';
+  return'<span class="badge badge-avail">พร้อมใช้</span>';
+}
+function formatDT(ts){
+  if(!ts)return'-';
+  const d=ts.toDate?ts.toDate():new Date(ts);
   return d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
 }
-function todayStr() { return new Date().toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}); }
-function genServiceNo() {
+function todayStr(){return new Date().toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'});}
+function genNo(){
   const d=new Date();
-  return 'WD-'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(Math.floor(Math.random()*9000)+1000);
-}
-function snBadge(unit) {
-  return unit.sn
-    ? `<span class="badge-sn badge">${unit.sn}</span>`
-    : `<span class="unit-no-sn">ไม่มี S/N</span>`;
-}
-function unitStatusBadge(status) {
-  if (status==='used') return '<span class="badge badge-used">เบิกแล้ว</span>';
-  if (status==='damaged') return '<span class="badge badge-damaged">ชำรุด</span>';
-  return '<span class="badge badge-available">พร้อมใช้</span>';
+  return'WD-'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(Math.floor(Math.random()*9000)+1000);
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // DASHBOARD
-// ============================================================
-function renderDashboardTab() {
-  const total = allItems.length;
-  const totalUnitsAvail = allUnits.filter(u=>u.status==='available').length;
-  const out = allItems.filter(i=>getItemQty(i.id)<=0).length;
-  const low = allItems.filter(i=>{ const q=getItemQty(i.id); return q>0&&q<=(i.min||1); }).length;
-  const cats = {};
-  allItems.forEach(i => { cats[i.cat]=(cats[i.cat]||0)+getItemQty(i.id); });
-  const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  const maxVal = topCats[0]?topCats[0][1]:1;
-  const recent = historyData.slice(0,8);
-  const alertItems = allItems.filter(i=>getStatus(i.id)!=='ok').slice(0,10);
+// ═══════════════════════════════════════════════════
+function renderDashboardTab(){
+  const totalAvail=allUnits.filter(u=>u.status==='available').length;
+  const out=allItems.filter(i=>getItemQty(i.id)<=0).length;
+  const low=allItems.filter(i=>{const q=getItemQty(i.id);return q>0&&q<=(i.min||1);}).length;
+  const cats={};
+  allItems.forEach(i=>{const g=getGroupKey(i.cat);cats[g]=(cats[g]||0)+getItemQty(i.id);});
+  const topCats=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  const maxV=topCats[0]?topCats[0][1]:1;
+  const recent=historyData.slice(0,6);
+  const alerts=allItems.filter(i=>getStatus(i.id)!=='ok').slice(0,8);
 
-  document.getElementById('mainContent').innerHTML = `
+  document.getElementById('mainContent').innerHTML=`
   <div class="stat-grid">
-    <div class="stat-card"><div class="stat-label">รายการสินค้า</div><div class="stat-value">${total}</div><div class="stat-sub">ประเภทสินค้า</div></div>
-    <div class="stat-card"><div class="stat-label">ชิ้นส่วนพร้อมใช้</div><div class="stat-value">${totalUnitsAvail}</div><div class="stat-sub">ชิ้น (รวมทุกประเภท)</div></div>
-    <div class="stat-card"><div class="stat-label" style="color:var(--amber)">ใกล้หมด</div><div class="stat-value" style="color:var(--amber)">${low}</div><div class="stat-sub">รายการ</div></div>
-    <div class="stat-card"><div class="stat-label" style="color:var(--red)">หมดสต็อก</div><div class="stat-value" style="color:var(--red)">${out}</div><div class="stat-sub">รายการ</div></div>
+    <div class="stat-card"><div class="stat-label">ประเภทสินค้า</div><div class="stat-value">${allItems.length}</div><div class="stat-sub">รายการ</div></div>
+    <div class="stat-card"><div class="stat-label">ชิ้นส่วนพร้อมใช้</div><div class="stat-value">${totalAvail}</div><div class="stat-sub">ชิ้น</div></div>
+    <div class="stat-card"><div class="stat-label" style="color:var(--am)">ใกล้หมด</div><div class="stat-value" style="color:var(--am)">${low}</div><div class="stat-sub">รายการ</div></div>
+    <div class="stat-card"><div class="stat-label" style="color:var(--r)">หมดสต็อก</div><div class="stat-value" style="color:var(--r)">${out}</div><div class="stat-sub">รายการ</div></div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+  <div class="dash-grid">
     <div class="card">
-      <div class="card-header"><span class="card-title">สต็อกตามหมวดหมู่</span></div>
-      <div style="padding:1.25rem">
-        ${topCats.map(([cat,val])=>`
-          <div style="margin-bottom:12px">
-            <div class="flex justify-between text-sm" style="margin-bottom:4px"><span>${cat}</span><span class="text-muted">${val} ชิ้น</span></div>
-            <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%"></div></div>
-          </div>`).join('')}
+      <div class="card-header"><span class="card-title">สต็อกตามกลุ่ม</span></div>
+      <div style="padding:1rem">
+        ${topCats.map(([k,v])=>{
+          const g=getGroupDef(k);
+          return`<div style="margin-bottom:11px">
+            <div class="flex jb fz12" style="margin-bottom:4px">
+              <span>${g.icon} ${g.label}</span><span class="txmute">${v} ชิ้น</span>
+            </div>
+            <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(v/maxV*100)}%"></div></div>
+          </div>`;
+        }).join('')}
       </div>
     </div>
     <div class="card">
       <div class="card-header"><span class="card-title">ความเคลื่อนไหวล่าสุด</span></div>
-      <div style="padding:1.25rem">
-        ${recent.length===0?'<p style="color:var(--text-3);font-size:13px">ยังไม่มีรายการ</p>':
-          recent.map(h=>`
-            <div class="flex gap8 items-center" style="margin-bottom:10px">
-              <div class="hist-dot" style="background:${h.type==='in'?'#1D9E75':'#E24B4A'}"></div>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:500">${h.type==='in'?'นำเข้า':'เบิก'} ${h.itemName}${h.sn?' (S/N:'+h.sn+')':''}</div>
-                <div style="font-size:11px;color:var(--text-3)">${h.userName||''} · ${h.usedAt||''}</div>
-              </div>
-              <div style="font-size:11px;color:var(--text-3)">${formatDT(h.createdAt)}</div>
-            </div>`).join('')}
+      <div style="padding:1rem">
+        ${recent.length===0?'<div class="empty-state">ยังไม่มีรายการ</div>':
+          recent.map(h=>`<div class="flex gap8 items-c" style="margin-bottom:10px">
+            <div class="hist-dot" style="background:${h.type==='in'?'#1D9E75':'#E24B4A'};flex-shrink:0"></div>
+            <div style="flex:1;min-width:0">
+              <div class="fz12 fw7" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.type==='in'?'นำเข้า':'เบิก'} ${h.itemName}</div>
+              <div class="fz11 txmute">${h.userName||''} · ${h.usedAt||''}</div>
+            </div>
+            <div class="fz11 txmute" style="flex-shrink:0">${formatDT(h.createdAt)}</div>
+          </div>`).join('')}
       </div>
     </div>
   </div>
-  ${alertItems.length>0?`
+  ${alerts.length>0?`
   <div class="card">
-    <div class="card-header"><span class="card-title">⚠️ รายการที่ต้องจัดการ</span></div>
-    <div class="table-wrap">
-      <table>
-        <tr><th style="width:90px">รหัส</th><th>รายการ</th><th style="width:90px;text-align:center">คงเหลือ</th><th style="width:110px">สถานะ</th></tr>
-        ${alertItems.map(i=>`
-          <tr><td class="mono text-sm text-muted">${i.id}</td><td class="fw600">${i.name}</td>
-          <td style="text-align:center;font-weight:600">${getItemQty(i.id)}</td><td>${statusBadge(i.id)}</td></tr>`).join('')}
-      </table>
+    <div class="card-header"><span class="card-title">⚠️ ต้องจัดการ</span></div>
+    <div style="padding:.5rem 0">
+      ${alerts.map(i=>`
+        <div class="item-row" style="cursor:default" onclick="showTab('stock')">
+          <div>
+            <div class="item-name">${i.name}</div>
+            <div class="item-code">${i.id}</div>
+          </div>
+          <div class="item-right">
+            ${statusBadge(i.id)}
+            <span class="fz12 fw7">${getItemQty(i.id)} ชิ้น</span>
+          </div>
+        </div>`).join('')}
     </div>
   </div>`:''}`;
 }
 
-// ============================================================
-// STOCK TAB — with unit expand
-// ============================================================
-function renderStockTab() {
-  const isAdmin = currentRole==='admin';
-  const q = searchQ.toLowerCase();
-  const filtered = allItems.filter(i=>!q||i.name.toLowerCase().includes(q)||i.id.toLowerCase().includes(q)||i.cat.toLowerCase().includes(q));
+// ═══════════════════════════════════════════════════
+// STOCK TAB — category accordion
+// ═══════════════════════════════════════════════════
+function renderStockTab(){
+  const isAdmin=currentRole==='admin';
+  const q=searchQ.toLowerCase();
+  const filtered=allItems.filter(i=>!q||i.name.toLowerCase().includes(q)||i.id.toLowerCase().includes(q)||(i.cat||'').toLowerCase().includes(q));
 
-  let rows = '';
-  filtered.forEach(item => {
-    const qty = getItemQty(item.id);
-    const units = getUnitsOf(item.id);
-    const isExpanded = expandedItem === item.id;
-    rows += `
-      <tr style="cursor:pointer" onclick="toggleExpand('${item.id}')">
-        <td class="mono text-sm text-muted">${item.id}</td>
-        <td class="fw600">
-          <span style="margin-right:6px">${isExpanded?'▾':'▸'}</span>${item.name}
-        </td>
-        <td><span style="background:#F0F0F0;padding:2px 8px;border-radius:20px;font-size:11px;color:var(--text-2)">${item.cat}</span></td>
-        <td style="text-align:center;font-weight:600">${qty}</td>
-        <td style="text-align:center;color:var(--text-3)">${item.min}</td>
-        <td style="font-size:12px;color:var(--text-3)">${item.loc}</td>
-        <td>${statusBadge(item.id)}</td>
-        ${isAdmin?`
-        <td onclick="event.stopPropagation()">
-          <div class="flex gap8">
-            <button class="btn btn-icon" onclick="openEditItem('${item.id}')" title="แก้ไขข้อมูล">✏️</button>
-            <button class="btn btn-icon btn-primary" onclick="openAddUnits('${item.id}')" title="เพิ่มชิ้นส่วน">+📦</button>
-          </div>
-        </td>`:''}
-      </tr>`;
-
-    if (isExpanded) {
-      rows += `<tr class="expand-row"><td colspan="${isAdmin?8:7}" style="padding:0">
-        <div class="expand-panel">
-          <div class="flex justify-between items-center" style="margin-bottom:10px">
-            <div style="font-size:13px;font-weight:600">ชิ้นส่วนทั้งหมด — ${item.name}
-              <span class="text-muted text-sm" style="margin-left:8px">${units.length} ชิ้น (พร้อมใช้: ${qty})</span>
-            </div>
-            ${isAdmin?`<button class="btn btn-primary" style="font-size:12px;padding:5px 10px" onclick="openAddUnits('${item.id}')">+ เพิ่มชิ้นส่วน</button>`:''}
-          </div>
-          ${units.length===0?'<div style="color:var(--text-3);font-size:13px;padding:8px 0">ยังไม่มีชิ้นส่วนในระบบ</div>':
-          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px">
-            ${units.map(u=>`
-              <div class="unit-card" style="grid-template-columns:8px 1fr auto">
-                <div class="dot dot-${u.status||'available'}"></div>
-                <div>
-                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-                    ${snBadge(u)}
-                    ${unitStatusBadge(u.status||'available')}
-                  </div>
-                  ${u.detail?`<div class="unit-meta">${u.detail}</div>`:''}
-                  ${u.note?`<div class="unit-meta" style="color:var(--amber)">📝 ${u.note}</div>`:''}
-                  ${u.status==='used'&&u.usedAtLabel?`<div class="unit-meta">📍 ${u.usedAtLabel}</div>`:''}
-                </div>
-                ${isAdmin?`<div class="flex gap8" onclick="event.stopPropagation()">
-                  <button class="btn btn-icon" title="แก้ไข" onclick="openEditUnit('${u.docId}')">✏️</button>
-                  ${u.status==='available'?`<button class="btn btn-icon btn-danger" title="ตัดออก" onclick="markUnitDamaged('${u.docId}')">🔧</button>`:''}
-                </div>`:''}
-              </div>`).join('')}
-          </div>`}
-        </div>
-      </td></tr>`;
-    }
+  // group filtered items by CAT_GROUPS
+  const grouped={};
+  filtered.forEach(item=>{
+    const k=getGroupKey(item.cat);
+    if(!grouped[k])grouped[k]=[];
+    grouped[k].push(item);
   });
 
-  document.getElementById('mainContent').innerHTML = `
-  <div class="flex justify-between items-center section-gap">
-    <div style="font-size:15px;font-weight:600">สต็อกสินค้า (${filtered.length} รายการ)</div>
+  let html=`
+  <div class="flex jb items-c section-gap">
+    <div style="font-size:15px;font-weight:700">สต็อกสินค้า</div>
     <div class="search-bar">
-      <input class="search-input" placeholder="ค้นหา รหัส / ชื่อ / หมวดหมู่..." value="${searchQ}"
-        oninput="searchQ=this.value;renderStockTab()"/>
-      ${isAdmin?`<button class="btn btn-primary" onclick="openAddItem()">+ เพิ่มประเภทสินค้า</button>`:''}
+      <input class="search-input" placeholder="ค้นหา..." value="${searchQ}" oninput="searchQ=this.value;renderStockTab()"/>
+      ${isAdmin?`<button class="btn btn-primary btn-sm" onclick="openAddItem()">+ เพิ่ม</button>`:''}
     </div>
-  </div>
-  <div class="card">
-    <div class="table-wrap">
-      <table>
-        <tr>
-          <th style="width:90px">รหัส</th><th>ชื่อสินค้า</th>
-          <th style="width:90px">หมวดหมู่</th>
-          <th style="width:80px;text-align:center">คงเหลือ</th>
-          <th style="width:70px;text-align:center">ขั้นต่ำ</th>
-          <th style="width:130px">สถานที่</th>
-          <th style="width:100px">สถานะ</th>
-          ${isAdmin?'<th style="width:110px">จัดการ</th>':''}
-        </tr>
-        ${rows}
-      </table>
+  </div>`;
+
+  // open all groups that have search results
+  if(q){Object.keys(grouped).forEach(k=>{openCats[k]=true;});}
+
+  CAT_GROUPS.forEach(grp=>{
+    const items=grouped[grp.key];
+    if(!items||!items.length)return;
+    const isOpen=openCats[grp.key]!==false; // default open
+    const totalQty=items.reduce((a,i)=>a+getItemQty(i.id),0);
+    const outCnt=items.filter(i=>getStatus(i.id)==='out').length;
+    const lowCnt=items.filter(i=>getStatus(i.id)==='low').length;
+
+    html+=`
+    <div class="cat-group">
+      <div class="cat-header ${isOpen?'open':''}" onclick="toggleCat('${grp.key}')">
+        <span class="cat-icon">${grp.icon}</span>
+        <span class="cat-name">${grp.label}</span>
+        <div class="cat-counts">
+          <span class="cat-count">${items.length} รายการ · ${totalQty} ชิ้น</span>
+          ${outCnt?`<span class="badge badge-out">${outCnt} หมด</span>`:''}
+          ${lowCnt?`<span class="badge badge-low">${lowCnt} ใกล้หมด</span>`:''}
+        </div>
+        <span class="cat-arrow">▼</span>
+      </div>
+      <div class="cat-body ${isOpen?'open':''}" id="catbody-${grp.key}">
+        ${items.map(item=>renderItemRow(item,isAdmin)).join('')}
+      </div>
+    </div>`;
+  });
+
+  if(!filtered.length) html+=`<div class="empty-state">ไม่พบสินค้าที่ค้นหา</div>`;
+  document.getElementById('mainContent').innerHTML=html;
+}
+
+function renderItemRow(item, isAdmin){
+  const qty=getItemQty(item.id);
+  const units=getUnitsOf(item.id);
+  const isExp=expandedItem===item.id;
+  return`
+  <div>
+    <div class="item-row ${isExp?'expanded':''}" onclick="toggleExpand('${item.id}')">
+      <div style="min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span style="font-size:${isExp?'14':'13'}px;transition:font-size .15s">▸</span>
+          <span class="item-name">${item.name}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="item-code">${item.id}</span>
+          ${statusBadge(item.id)}
+        </div>
+      </div>
+      <div class="item-right">
+        <div class="qty-pill">${qty}<span class="fz11 txmute"> ชิ้น</span></div>
+        ${isAdmin?`<div class="flex gap8" onclick="event.stopPropagation()">
+          <button class="btn btn-icon btn-sm" onclick="openEditItem('${item.id}')" title="แก้ไข">✏️</button>
+          <button class="btn btn-icon btn-sm btn-primary" onclick="openAddUnits('${item.id}')" title="เพิ่มชิ้นส่วน">+📦</button>
+        </div>`:''}
+      </div>
+    </div>
+    <div class="item-expand ${isExp?'open':''}" id="expand-${item.id}">
+      <div class="flex jb items-c" style="margin-bottom:8px">
+        <span class="fz12 fw7">${units.length} ชิ้น (พร้อมใช้: ${qty})</span>
+        ${isAdmin?`<button class="btn btn-primary btn-sm" onclick="openAddUnits('${item.id}')">+ เพิ่มชิ้นส่วน</button>`:''}
+      </div>
+      ${units.length===0?`<div class="fz12 txmute" style="padding:6px 0">ยังไม่มีชิ้นส่วนในระบบ</div>`:`
+      <div class="units-grid">
+        ${units.map(u=>`
+          <div class="unit-card">
+            <div class="unit-dot dot-${u.status||'available'}"></div>
+            <div class="unit-info">
+              ${snBadge(u)} ${unitStatBadge(u.status||'available')}
+              ${u.detail?`<div class="unit-detail">${u.detail}</div>`:''}
+              ${u.note?`<div class="unit-note">📝 ${u.note}</div>`:''}
+              ${u.status==='used'&&u.usedAtLabel?`<div class="unit-loc">📍 ${u.usedAtLabel}</div>`:''}
+            </div>
+            ${isAdmin?`<div class="unit-actions">
+              <button class="btn btn-icon btn-sm" onclick="openEditUnit('${u.docId}')">✏️</button>
+              ${u.status==='available'?`<button class="btn btn-icon btn-sm btn-danger" onclick="markDamaged('${u.docId}')">🔧</button>`:''}
+            </div>`:''}
+          </div>`).join('')}
+      </div>`}
     </div>
   </div>`;
 }
 
-function toggleExpand(itemId) {
-  expandedItem = expandedItem === itemId ? null : itemId;
+function toggleCat(key){
+  openCats[key]=(openCats[key]===false)?true:false;
+  renderStockTab();
+}
+function toggleExpand(id){
+  expandedItem=expandedItem===id?null:id;
   renderStockTab();
 }
 
-// ============================================================
-// ADD UNITS MODAL — batch add with S/N + detail
-// ============================================================
-let pendingUnits = [];
-
-function openAddUnits(itemId) {
-  const item = allItems.find(i=>i.id===itemId);
-  pendingUnits = [{ sn:'', detail:'', note:'' }];
+// ═══════════════════════════════════════════════════
+// ADD UNITS MODAL
+// ═══════════════════════════════════════════════════
+function openAddUnits(itemId){
+  const item=allItems.find(i=>i.id===itemId);
+  pendingUnits=[{sn:'',detail:'',note:''}];
   renderAddUnitsModal(item);
 }
-
-function renderAddUnitsModal(item) {
+function renderAddUnitsModal(item){
   showModal(`
+    <div class="modal-handle"></div>
     <div class="modal-title">📦 เพิ่มชิ้นส่วน — ${item.name}</div>
-    <div style="font-size:12px;color:var(--text-3);margin-bottom:1rem">
-      ระบุรายละเอียดแต่ละชิ้น เช่น S/N, MAC Address, สเปก, หมายเหตุ
+    <div style="background:var(--bl);border-radius:var(--radsm);padding:8px 10px;font-size:11px;color:var(--b);margin-bottom:1rem">
+      💡 ระบุ S/N และรายละเอียดแต่ละชิ้น หรือเว้นว่างหากไม่มี
     </div>
-    <div style="background:var(--bg);border-radius:var(--radius);padding:8px 12px;margin-bottom:1rem;font-size:12px;display:flex;gap:1rem;font-weight:600">
-      <span style="flex:1.2">S/N (Serial Number)</span>
-      <span style="flex:2">รายละเอียด (สเปก, MAC, รุ่น...)</span>
-      <span style="flex:1.2">หมายเหตุ</span>
-      <span style="width:28px"></span>
+    <div style="display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;margin-bottom:4px;font-size:10px;font-weight:700;color:var(--tx3);padding:0 2px">
+      <span>S/N</span><span>รายละเอียด</span><span>หมายเหตุ</span><span></span>
     </div>
-    <div id="pendingUnitsList">
-      ${pendingUnits.map((u,i)=>unitInputRow(u,i)).join('')}
+    <div id="pendingList">
+      ${pendingUnits.map((u,i)=>snRowHTML(u,i)).join('')}
     </div>
-    <button class="btn" style="margin-top:8px" onclick="addPendingRow('${item.id}')">+ เพิ่มแถว</button>
+    <button class="btn btn-sm" style="margin-top:8px" onclick="addPendingRow('${item.id}')">+ เพิ่มแถว</button>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn btn-primary" onclick="doSaveUnits('${item.id}')">💾 บันทึกทั้งหมด (${pendingUnits.length} ชิ้น)</button>
-    </div>`, true);
+      <button class="btn btn-primary" id="savePendingBtn" onclick="doSaveUnits('${item.id}')">💾 บันทึก ${pendingUnits.length} ชิ้น</button>
+    </div>`,true);
 }
-
-function unitInputRow(u, i) {
-  return `<div class="sn-row" id="unitrow-${i}">
-    <input placeholder="S/N หรือเว้นว่าง" value="${u.sn||''}"
-      oninput="pendingUnits[${i}].sn=this.value" style="flex:1.2;font-family:monospace;font-size:12px"/>
-    <input class="detail-in" placeholder="รายละเอียด เช่น 2TB 7200RPM / MAC: AA:BB..." value="${u.detail||''}"
-      oninput="pendingUnits[${i}].detail=this.value" style="flex:2"/>
-    <input placeholder="หมายเหตุ" value="${u.note||''}"
-      oninput="pendingUnits[${i}].note=this.value" style="flex:1.2"/>
-    <button class="btn btn-icon" onclick="removePendingRow(${i})" style="color:var(--red);flex-shrink:0">✕</button>
+function snRowHTML(u,i){
+  return`<div class="sn-row" id="srow-${i}">
+    <input placeholder="S/N" value="${u.sn||''}" oninput="pendingUnits[${i}].sn=this.value"/>
+    <input placeholder="รายละเอียด เช่น 2TB SATA" value="${u.detail||''}" oninput="pendingUnits[${i}].detail=this.value"/>
+    <input placeholder="หมายเหตุ" value="${u.note||''}" oninput="pendingUnits[${i}].note=this.value"/>
+    <button class="btn btn-icon btn-sm btn-danger" onclick="removePendingRow(${i})">✕</button>
   </div>`;
 }
-
-function addPendingRow(itemId) {
-  pendingUnits.push({ sn:'', detail:'', note:'' });
-  document.getElementById('pendingUnitsList').innerHTML = pendingUnits.map((u,i)=>unitInputRow(u,i)).join('');
-  const mo = document.querySelector('#modalOverlay .modal .modal-actions .btn-primary');
-  if (mo) mo.textContent = `💾 บันทึกทั้งหมด (${pendingUnits.length} ชิ้น)`;
+function addPendingRow(itemId){
+  pendingUnits.push({sn:'',detail:'',note:''});
+  document.getElementById('pendingList').innerHTML=pendingUnits.map((u,i)=>snRowHTML(u,i)).join('');
+  const b=document.getElementById('savePendingBtn');
+  if(b)b.textContent=`💾 บันทึก ${pendingUnits.length} ชิ้น`;
 }
-
-function removePendingRow(idx) {
-  if (pendingUnits.length === 1) { showNotif('ต้องมีอย่างน้อย 1 แถว','error'); return; }
+function removePendingRow(idx){
+  if(pendingUnits.length===1){showNotif('ต้องมีอย่างน้อย 1 แถว','error');return;}
   pendingUnits.splice(idx,1);
-  document.getElementById('pendingUnitsList').innerHTML = pendingUnits.map((u,i)=>unitInputRow(u,i)).join('');
+  document.getElementById('pendingList').innerHTML=pendingUnits.map((u,i)=>snRowHTML(u,i)).join('');
 }
-
-async function doSaveUnits(itemId) {
-  const item = allItems.find(i=>i.id===itemId);
-  // collect latest values from DOM
-  pendingUnits.forEach((u,i) => {
-    const row = document.getElementById(`unitrow-${i}`);
-    if (row) {
-      const inputs = row.querySelectorAll('input');
-      u.sn = inputs[0].value.trim();
-      u.detail = inputs[1].value.trim();
-      u.note = inputs[2].value.trim();
-    }
+async function doSaveUnits(itemId){
+  const item=allItems.find(i=>i.id===itemId);
+  // collect latest DOM values
+  pendingUnits.forEach((u,i)=>{
+    const row=document.getElementById(`srow-${i}`);
+    if(row){const inp=row.querySelectorAll('input');u.sn=inp[0].value.trim();u.detail=inp[1].value.trim();u.note=inp[2].value.trim();}
   });
-  if (pendingUnits.length === 0) return;
-
-  const batch = db.batch();
-  const newUnits = pendingUnits.map(u => ({
-    itemId, sn: u.sn, detail: u.detail, note: u.note,
-    status: 'available',
-    addedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    addedBy: currentUser.displayName, addedByUid: currentUser.uid
-  }));
-  newUnits.forEach(u => batch.set(db.collection('units').doc(), u));
-  // log transaction
-  batch.set(db.collection('transactions').doc(), {
-    type: 'in', itemId, itemName: item.name,
-    qty: newUnits.length,
-    sn: newUnits.map(u=>u.sn).filter(Boolean).join(', '),
-    userId: currentUser.uid, userEmail: currentUser.email, userName: currentUser.displayName,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(), source:'manual'
+  const batch=db.batch();
+  pendingUnits.forEach(u=>{
+    batch.set(db.collection('units').doc(),{
+      itemId,sn:u.sn,detail:u.detail,note:u.note,status:'available',
+      addedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      addedBy:currentUser.displayName,addedByUid:currentUser.uid
+    });
+  });
+  batch.set(db.collection('transactions').doc(),{
+    type:'in',itemId,itemName:item.name,qty:pendingUnits.length,
+    sn:pendingUnits.map(u=>u.sn).filter(Boolean).join(', '),
+    userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),source:'manual'
   });
   await batch.commit();
-  // add to local state
-  const snap = await db.collection('units').where('itemId','==',itemId).get();
-  const freshUnits = snap.docs.map(d=>({docId:d.id,...d.data()}));
-  allUnits = allUnits.filter(u=>u.itemId!==itemId).concat(freshUnits);
-  closeModal();
-  showNotif(`เพิ่ม ${newUnits.length} ชิ้นสำเร็จ`);
-  renderStockTab();
+  const snap=await db.collection('units').where('itemId','==',itemId).get();
+  allUnits=allUnits.filter(u=>u.itemId!==itemId).concat(snap.docs.map(d=>({docId:d.id,...d.data()})));
+  closeModal(); showNotif(`เพิ่ม ${pendingUnits.length} ชิ้นสำเร็จ`); renderStockTab();
 }
 
-// ============================================================
-// EDIT UNIT MODAL
-// ============================================================
-function openEditUnit(unitDocId) {
-  const unit = allUnits.find(u=>u.docId===unitDocId);
-  if (!unit) return;
+// ═══════════════════════════════════════════════════
+// EDIT UNIT
+// ═══════════════════════════════════════════════════
+function openEditUnit(uid){
+  const u=allUnits.find(x=>x.docId===uid);if(!u)return;
   showModal(`
+    <div class="modal-handle"></div>
     <div class="modal-title">✏️ แก้ไขชิ้นส่วน</div>
-    <div class="field"><label>S/N (Serial Number)</label>
-      <input id="euSN" value="${unit.sn||''}" placeholder="ระบุ S/N หรือเว้นว่าง" style="font-family:monospace"/></div>
-    <div class="field"><label>รายละเอียด (สเปก, MAC, รุ่น...)</label>
-      <input id="euDetail" value="${unit.detail||''}" placeholder="เช่น 2TB 7200RPM SATA"/></div>
-    <div class="field"><label>หมายเหตุ</label>
-      <textarea id="euNote" placeholder="ข้อสังเกต สภาพ ฯลฯ">${unit.note||''}</textarea></div>
+    <div class="field"><label>S/N</label><input id="euSN" value="${u.sn||''}" style="font-family:var(--mono)"/></div>
+    <div class="field"><label>รายละเอียด</label><input id="euD" value="${u.detail||''}" placeholder="สเปก, MAC, รุ่น..."/></div>
+    <div class="field"><label>หมายเหตุ</label><textarea id="euN">${u.note||''}</textarea></div>
     <div class="field"><label>สถานะ</label>
-      <select id="euStatus">
-        <option value="available" ${unit.status==='available'?'selected':''}>✅ พร้อมใช้</option>
-        <option value="damaged" ${unit.status==='damaged'?'selected':''}>🔧 ชำรุด / ซ่อม</option>
-      </select>
-    </div>
+      <select id="euS"><option value="available" ${u.status==='available'?'selected':''}>✅ พร้อมใช้</option>
+        <option value="damaged" ${u.status==='damaged'?'selected':''}>🔧 ชำรุด</option>
+        <option value="used" ${u.status==='used'?'selected':''}>📤 เบิกแล้ว</option></select></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn btn-primary" onclick="doSaveUnit('${unitDocId}')">บันทึก</button>
+      <button class="btn btn-primary" onclick="doSaveUnit('${uid}')">บันทึก</button>
     </div>`);
 }
-
-async function doSaveUnit(unitDocId) {
-  const unit = allUnits.find(u=>u.docId===unitDocId);
-  const data = {
-    sn: document.getElementById('euSN').value.trim(),
-    detail: document.getElementById('euDetail').value.trim(),
-    note: document.getElementById('euNote').value.trim(),
-    status: document.getElementById('euStatus').value
-  };
-  await db.collection('units').doc(unitDocId).update(data);
-  Object.assign(unit, data);
-  closeModal();
-  showNotif('บันทึกสำเร็จ');
-  renderStockTab();
+async function doSaveUnit(uid){
+  const u=allUnits.find(x=>x.docId===uid);
+  const data={sn:document.getElementById('euSN').value.trim(),detail:document.getElementById('euD').value.trim(),
+    note:document.getElementById('euN').value.trim(),status:document.getElementById('euS').value};
+  await db.collection('units').doc(uid).update(data);
+  Object.assign(u,data); closeModal(); showNotif('บันทึกสำเร็จ'); renderStockTab();
+}
+async function markDamaged(uid){
+  if(!confirm('ทำเครื่องหมาย "ชำรุด" สำหรับชิ้นนี้?'))return;
+  await db.collection('units').doc(uid).update({status:'damaged'});
+  const u=allUnits.find(x=>x.docId===uid);if(u)u.status='damaged';
+  showNotif('อัปเดตสถานะแล้ว'); renderStockTab();
 }
 
-async function markUnitDamaged(unitDocId) {
-  if (!confirm('ทำเครื่องหมายชิ้นนี้เป็น "ชำรุด/ซ่อม"?')) return;
-  await db.collection('units').doc(unitDocId).update({ status:'damaged' });
-  const unit = allUnits.find(u=>u.docId===unitDocId);
-  if (unit) unit.status = 'damaged';
-  showNotif('อัปเดตสถานะแล้ว');
-  renderStockTab();
-}
-
-// ============================================================
-// ITEM CRUD (type/definition only)
-// ============================================================
-function openAddItem() {
+// ═══════════════════════════════════════════════════
+// ADD/EDIT ITEM TYPE
+// ═══════════════════════════════════════════════════
+function openAddItem(){
   showModal(`
-    <div class="modal-title">+ เพิ่มประเภทสินค้าใหม่</div>
+    <div class="modal-handle"></div>
+    <div class="modal-title">+ เพิ่มประเภทสินค้า</div>
     <div class="grid-2">
       <div class="field"><label>รหัสสินค้า *</label><input id="mId" placeholder="SP050"/></div>
-      <div class="field"><label>หมวดหมู่ *</label><input id="mCat" placeholder="Storage, Network..."/></div>
+      <div class="field"><label>หมวดหมู่</label>
+        <select id="mCat">${['Storage','Memory','Component','Network','Cable','Power','Device','Camera','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
     </div>
-    <div class="field"><label>ชื่อสินค้า *</label><input id="mName" placeholder="ชื่อสินค้า"/></div>
+    <div class="field"><label>ชื่อสินค้า *</label><input id="mName"/></div>
     <div class="grid-2">
-      <div class="field"><label>จำนวนขั้นต่ำ (แจ้งเตือน)</label><input id="mMin" type="number" value="1" min="0"/></div>
-      <div class="field"><label>สถานที่จัดเก็บ</label><input id="mLoc" value="ชั้นเก็บของ IT"/></div>
+      <div class="field"><label>จำนวนขั้นต่ำ</label><input id="mMin" type="number" value="1" min="0"/></div>
+      <div class="field"><label>สถานที่</label><input id="mLoc" value="ชั้น IT"/></div>
     </div>
-    <div style="background:var(--blue-light);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--blue);margin-bottom:1rem">
-      💡 หลังเพิ่มประเภทแล้ว ให้ไปที่ปุ่ม "+📦" เพื่อเพิ่มชิ้นส่วนแต่ละชิ้นพร้อม S/N
-    </div>
+    <div class="info-box">💡 หลังเพิ่มแล้ว กด +📦 เพื่อเพิ่มชิ้นส่วนพร้อม S/N</div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">ยกเลิก</button>
       <button class="btn btn-primary" onclick="doAddItem()">บันทึก</button>
     </div>`);
 }
-
-async function doAddItem() {
-  const id = document.getElementById('mId').value.trim().toUpperCase();
-  const name = document.getElementById('mName').value.trim();
-  const cat = document.getElementById('mCat').value.trim();
-  if (!id||!name) { showNotif('กรุณากรอกข้อมูลให้ครบ','error'); return; }
-  if (allItems.find(i=>i.id===id)) { showNotif('รหัสสินค้าซ้ำ!','error'); return; }
-  const data = { id, name, cat:cat||'Other', min:parseInt(document.getElementById('mMin').value)||1, loc:document.getElementById('mLoc').value };
+async function doAddItem(){
+  const id=document.getElementById('mId').value.trim().toUpperCase();
+  const name=document.getElementById('mName').value.trim();
+  if(!id||!name){showNotif('กรุณากรอกให้ครบ','error');return;}
+  if(allItems.find(i=>i.id===id)){showNotif('รหัสซ้ำ!','error');return;}
+  const data={id,name,cat:document.getElementById('mCat').value,
+    min:parseInt(document.getElementById('mMin').value)||1,loc:document.getElementById('mLoc').value};
   await db.collection('items').doc(id).set(data);
-  allItems.push({ docId:id, ...data });
-  allItems.sort((a,b)=>a.id.localeCompare(b.id));
-  closeModal(); showNotif('เพิ่มประเภทสินค้าสำเร็จ'); renderStockTab();
+  allItems.push({docId:id,...data}); allItems.sort((a,b)=>a.id.localeCompare(b.id));
+  closeModal(); showNotif('เพิ่มสำเร็จ'); renderStockTab();
 }
-
-function openEditItem(id) {
-  const item = allItems.find(i=>i.id===id);
+function openEditItem(id){
+  const item=allItems.find(i=>i.id===id);
   showModal(`
+    <div class="modal-handle"></div>
     <div class="modal-title">✏️ แก้ไข — ${item.name}</div>
     <div class="field"><label>ชื่อสินค้า</label><input id="eName" value="${item.name}"/></div>
     <div class="grid-2">
-      <div class="field"><label>หมวดหมู่</label><input id="eCat" value="${item.cat}"/></div>
-      <div class="field"><label>สถานที่จัดเก็บ</label><input id="eLoc" value="${item.loc}"/></div>
+      <div class="field"><label>หมวดหมู่</label>
+        <select id="eCat">${['Storage','Memory','Component','Network','Cable','Power','Device','Camera','Other'].map(c=>`<option ${item.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>สถานที่</label><input id="eLoc" value="${item.loc}"/></div>
     </div>
-    <div class="field"><label>จำนวนขั้นต่ำ (แจ้งเตือน)</label><input id="eMin" type="number" value="${item.min}" min="0"/></div>
+    <div class="field"><label>จำนวนขั้นต่ำ</label><input id="eMin" type="number" value="${item.min}" min="0"/></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">ยกเลิก</button>
       <button class="btn btn-primary" onclick="doEditItem('${id}')">บันทึก</button>
     </div>`);
 }
-
-async function doEditItem(id) {
-  const item = allItems.find(i=>i.id===id);
-  const data = {
-    name: document.getElementById('eName').value,
-    cat: document.getElementById('eCat').value,
-    loc: document.getElementById('eLoc').value,
-    min: parseInt(document.getElementById('eMin').value)||1
-  };
+async function doEditItem(id){
+  const item=allItems.find(i=>i.id===id);
+  const data={name:document.getElementById('eName').value,cat:document.getElementById('eCat').value,
+    loc:document.getElementById('eLoc').value,min:parseInt(document.getElementById('eMin').value)||1};
   await db.collection('items').doc(id).update(data);
-  Object.assign(item, data);
-  closeModal(); showNotif('บันทึกสำเร็จ'); renderStockTab();
+  Object.assign(item,data); closeModal(); showNotif('บันทึกสำเร็จ'); renderStockTab();
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // QR TAB
-// ============================================================
-function renderQRTab() {
-  const isAdmin = currentRole==='admin';
-  document.getElementById('mainContent').innerHTML = `
-  <div class="qr-panel">
-    <div style="font-size:16px;font-weight:600;margin-bottom:4px">📷 สแกน QR Code</div>
-    <div style="font-size:13px;color:var(--text-3);margin-bottom:1rem">สแกนเพื่อตรวจสอบ${isAdmin?'หรือเบิก/นำเข้า':''}สินค้า</div>
-    <div class="qr-box" onclick="simulateScan()" id="qrBox">
+// ═══════════════════════════════════════════════════
+function renderQRTab(){
+  const isAdmin=currentRole==='admin';
+  const avail=scannedItem?getAvail(scannedItem.id):[];
+  document.getElementById('mainContent').innerHTML=`
+  <div class="qr-wrap">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px">📷 สแกน QR Code</div>
+    <div class="fz12 txmute" style="margin-bottom:.9rem">สแกนหรือเลือกสินค้าเพื่อตรวจสอบ${isAdmin?'/เบิก/นำเข้า':''}</div>
+
+    <div class="qr-box" onclick="simulateScan()">
       ${scanStep===1?'<div class="scan-line"></div>':''}
-      <span style="font-size:52px">📷</span>
+      <span style="font-size:46px">📷</span>
       <span>${scanStep===1?'กำลังสแกน...':'แตะเพื่อสแกน'}</span>
     </div>
-    <div style="font-size:13px;color:var(--text-3);margin-bottom:6px">หรือเลือกสินค้า:</div>
-    <select onchange="quickScanSelect(this.value)" style="width:100%;padding:8px 12px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:13px;margin-bottom:1rem">
-      <option value="">— เลือกสินค้า —</option>
-      ${allItems.map(i=>`<option value="${i.id}">${i.id} - ${i.name} (เหลือ ${getItemQty(i.id)})</option>`).join('')}
-    </select>
-    ${scanStep===2&&scannedItem?renderQRResult(isAdmin):''}
+
+    <div class="field">
+      <label>หรือเลือกสินค้า</label>
+      <select onchange="quickScan(this.value)">
+        <option value="">— เลือกสินค้า —</option>
+        ${allItems.map(i=>`<option value="${i.id}">${i.id} – ${i.name} (${getItemQty(i.id)} ชิ้น)</option>`).join('')}
+      </select>
+    </div>
+
+    ${scanStep===2&&scannedItem?`
+    <div class="qr-result">
+      <div class="flex jb items-c" style="margin-bottom:10px">
+        <span style="font-size:15px;font-weight:700">${scannedItem.name}</span>
+        ${statusBadge(scannedItem.id)}
+      </div>
+      <div class="grid-2">
+        <div><div class="res-lbl">รหัส</div><div class="res-val mono">${scannedItem.id}</div></div>
+        <div><div class="res-lbl">คงเหลือ</div><div class="res-val" style="font-size:18px">${avail.length} ชิ้น</div></div>
+        <div><div class="res-lbl">กลุ่ม</div><div class="res-val">${scannedItem.cat}</div></div>
+        <div><div class="res-lbl">สถานที่</div><div class="res-val">${scannedItem.loc}</div></div>
+      </div>
+      ${avail.length>0?`
+      <div style="margin-top:8px">
+        <div class="fz11 txmute fw7" style="margin-bottom:4px">S/N พร้อมใช้:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          ${avail.slice(0,10).map(u=>u.sn?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">—</span>`).join('')}
+          ${avail.length>10?`<span class="fz11 txmute">+${avail.length-10}</span>`:''}
+        </div>
+      </div>`:''}
+    </div>
+
+    ${isAdmin?`
+    <div class="op-tabs">
+      <div class="op-tab ${scanOp==='out'?'active':''}" onclick="setScanOp('out')">📤 เบิกออก</div>
+      <div class="op-tab ${scanOp==='in'?'active':''}" onclick="setScanOp('in')">📥 นำเข้า</div>
+    </div>
+    ${scanOp==='out'&&avail.length>0?`
+    <div class="fz12 fw7 txm" style="margin-bottom:6px">เลือกชิ้นที่จะเบิก:</div>
+    <div class="unit-picker">
+      ${avail.slice(0,15).map(u=>`
+        <label class="unit-pick-row">
+          <input type="checkbox" class="upick-cb" value="${u.docId}"/>
+          ${snBadge(u)}
+          <span class="fz12 txm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.detail||'—'}</span>
+        </label>`).join('')}
+    </div>`:''}
+    ${scanOp==='in'?`<div class="info-box">💡 ใช้ปุ่ม +📦 ในหน้าสต็อกเพื่อนำเข้าพร้อม S/N</div>`:''}
+    <div class="field" style="margin-top:10px"><label>ใช้งานที่</label><input id="qrUAt" placeholder="เช่น PC-05"/></div>
+    <div class="field"><label>หมายเหตุ</label><input id="qrNote" placeholder="ระบุรายละเอียด"/></div>
+    ${scanOp==='out'?`<button class="btn btn-primary btn-full" onclick="doQROp()">✅ ยืนยันการเบิก</button>`:''}
+    `:`<div class="info-box" style="background:var(--bl);color:var(--b)">ℹ️ เฉพาะ Admin เท่านั้นที่เบิก/นำเข้าได้</div>`}
+    <button class="btn btn-full" style="margin-top:8px" onclick="resetScan()">🔄 สแกนใหม่</button>
+    `:''}
   </div>`;
 }
 
-function renderQRResult(isAdmin) {
-  const item = scannedItem;
-  const units = getAvailableUnits(item.id);
-  return `
-  <div class="qr-result">
-    <div class="flex justify-between items-center" style="margin-bottom:10px">
-      <span style="font-size:15px;font-weight:700">${item.name}</span>
-      ${statusBadge(item.id)}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><div class="result-label">รหัสสินค้า</div><div class="result-value mono">${item.id}</div></div>
-      <div><div class="result-label">คงเหลือ</div><div class="result-value" style="font-size:18px">${units.length} ชิ้น</div></div>
-      <div><div class="result-label">หมวดหมู่</div><div class="result-value">${item.cat}</div></div>
-      <div><div class="result-label">สถานที่</div><div class="result-value">${item.loc}</div></div>
-    </div>
-    ${units.length>0?`
-    <div style="margin-top:10px;font-size:12px;color:var(--text-3);font-weight:600;margin-bottom:6px">ชิ้นส่วนพร้อมใช้:</div>
-    <div style="max-height:120px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px">
-      ${units.slice(0,12).map(u=>u.sn?`<span class="badge-sn badge">${u.sn}</span>`:`<span class="unit-no-sn">ไม่มี S/N</span>`).join('')}
-      ${units.length>12?`<span class="text-muted text-sm">+${units.length-12} เพิ่มเติม</span>`:''}
-    </div>`:''}
-  </div>
-  ${isAdmin?`
-  <div class="op-tabs">
-    <div class="op-tab ${scanOp==='out'?'active':''}" onclick="setScanOp('out')">📤 เบิกออก</div>
-    <div class="op-tab ${scanOp==='in'?'active':''}" onclick="setScanOp('in')">📥 นำเข้า</div>
-  </div>
-  ${scanOp==='out'&&units.length>0?`
-  <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">เลือกชิ้นส่วนที่จะเบิก:</div>
-  <div class="unit-picker">
-    ${units.slice(0,10).map(u=>`
-      <label class="unit-pick-row" id="upick-${u.docId}">
-        <input type="checkbox" class="unit-pick-cb" value="${u.docId}" onchange="updateQRScanSelection()"/>
-        ${snBadge(u)}
-        <span style="font-size:12px;color:var(--text-2);flex:1">${u.detail||'ไม่มีรายละเอียด'}</span>
-      </label>`).join('')}
-  </div>`:''}
-  ${scanOp==='in'?`
-  <div style="background:var(--blue-light);border-radius:var(--radius);padding:10px;font-size:12px;color:var(--blue);margin:8px 0">
-    💡 ใช้ปุ่ม "+📦" ในหน้าสต็อกเพื่อนำเข้าพร้อมระบุ S/N และรายละเอียด
-  </div>`:''}
-  <div class="field" style="margin-top:12px"><label>ใช้งานที่ / สถานที่</label><input id="qrUsedAt" placeholder="เช่น PC-05"/></div>
-  <div class="field"><label>หมายเหตุ</label><input id="qrNote" placeholder="ระบุรายละเอียด..."/></div>
-  ${scanOp==='out'?`<button class="btn btn-primary" style="width:100%" onclick="doQROp()">✅ ยืนยันการเบิก</button>`:''}
-  `:`<div style="background:var(--blue-light);border-radius:var(--radius);padding:12px;font-size:13px;color:var(--blue);text-align:center">
-    ℹ️ เฉพาะ Admin เท่านั้นที่สามารถเบิก/นำเข้าสินค้าได้
-  </div>`}
-  <button class="btn" style="width:100%;margin-top:8px;justify-content:center" onclick="resetScan()">🔄 สแกนใหม่</button>`;
+function simulateScan(){
+  if(scanStep!==0)return;
+  scanStep=1;renderQRTab();
+  setTimeout(()=>{scannedItem=allItems[Math.floor(Math.random()*allItems.length)];scanStep=2;qrSelectedUnits=[];renderQRTab();},1400);
 }
+function quickScan(id){if(!id)return;scannedItem=allItems.find(i=>i.id===id);scanStep=2;qrSelectedUnits=[];renderQRTab();}
+function setScanOp(op){scanOp=op;renderQRTab();}
+function resetScan(){scanStep=0;scannedItem=null;qrSelectedUnits=[];renderQRTab();}
 
-let qrSelectedUnits = [];
-function updateQRScanSelection() {
-  qrSelectedUnits = [...document.querySelectorAll('.unit-pick-cb:checked')].map(c=>c.value);
-}
-
-function simulateScan() {
-  if (scanStep!==0) return;
-  scanStep=1; renderQRTab();
-  setTimeout(()=>{ scannedItem=allItems[Math.floor(Math.random()*allItems.length)]; scanStep=2; renderQRTab(); },1400);
-}
-function quickScanSelect(id) { if(!id)return; scannedItem=allItems.find(i=>i.id===id); scanStep=2; qrSelectedUnits=[]; renderQRTab(); }
-function setScanOp(op) { scanOp=op; qrSelectedUnits=[]; renderQRTab(); }
-function resetScan() { scanStep=0; scannedItem=null; qrSelectedUnits=[]; renderQRTab(); }
-
-async function doQROp() {
-  if (!scannedItem||scanOp!=='out') return;
-  updateQRScanSelection();
-  if (qrSelectedUnits.length===0) { showNotif('เลือกอย่างน้อย 1 ชิ้น','error'); return; }
-  const usedAt = document.getElementById('qrUsedAt')?.value||'';
-  const note = document.getElementById('qrNote')?.value||'';
-  const serviceNo = genServiceNo();
-  const batch = db.batch();
-  qrSelectedUnits.forEach(uid => {
-    batch.update(db.collection('units').doc(uid), {
-      status:'used', usedAtLabel:usedAt, usedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      usedBy:currentUser.displayName, usedTxId:serviceNo
-    });
-    const u = allUnits.find(x=>x.docId===uid);
-    batch.set(db.collection('transactions').doc(), {
-      type:'out', serviceNo, itemId:scannedItem.id, itemName:scannedItem.name,
-      qty:1, sn:u?.sn||'', unitId:uid, usedAt,
-      note, source:'qr_scan',
-      userId:currentUser.uid, userEmail:currentUser.email, userName:currentUser.displayName,
+async function doQROp(){
+  const cbs=[...document.querySelectorAll('.upick-cb:checked')];
+  if(!cbs.length){showNotif('เลือกอย่างน้อย 1 ชิ้น','error');return;}
+  const usedAt=document.getElementById('qrUAt')?.value||'';
+  const note=document.getElementById('qrNote')?.value||'';
+  const svcNo=genNo();
+  const batch=db.batch();
+  cbs.forEach(cb=>{
+    const uid=cb.value;
+    const u=allUnits.find(x=>x.docId===uid);
+    batch.update(db.collection('units').doc(uid),{status:'used',usedAtLabel:usedAt,usedAt:firebase.firestore.FieldValue.serverTimestamp(),usedBy:currentUser.displayName,usedTxId:svcNo});
+    batch.set(db.collection('transactions').doc(),{
+      type:'out',serviceNo:svcNo,itemId:scannedItem.id,itemName:scannedItem.name,qty:1,
+      sn:u?.sn||'',unitId:uid,detail:u?.detail||'',usedAt,note,source:'qr_scan',
+      userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
   });
   await batch.commit();
-  qrSelectedUnits.forEach(uid => {
-    const u = allUnits.find(x=>x.docId===uid);
-    if (u) { u.status='used'; u.usedAtLabel=usedAt; }
-  });
-  showNotif(`เบิก ${qrSelectedUnits.length} ชิ้นสำเร็จ`);
-  resetScan();
+  cbs.forEach(cb=>{const u=allUnits.find(x=>x.docId===cb.value);if(u){u.status='used';u.usedAtLabel=usedAt;}});
+  showNotif(`เบิก ${cbs.length} ชิ้นสำเร็จ`);resetScan();
 }
 
-// ============================================================
-// WITHDRAW TAB — select individual units
-// ============================================================
-function renderWithdrawTab() {
-  if (!currentServiceNo) currentServiceNo = genServiceNo();
-  document.getElementById('mainContent').innerHTML = `
-  <div style="display:grid;grid-template-columns:1fr 400px;gap:1.5rem;align-items:start">
-    <div>
-      <div class="flex justify-between items-center section-gap">
-        <div style="font-size:15px;font-weight:600">📤 สร้างใบเบิกสินค้า</div>
-        <button class="btn" onclick="withdrawUnits=[];currentServiceNo=genServiceNo();renderWithdrawTab()">🔄 ล้างรายการ</button>
-      </div>
-      <div class="card" style="margin-bottom:1rem;padding:1.25rem">
-        <div class="service-ref">
-          <div><div class="service-ref-label">เลขที่ใบเบิก</div><div class="service-ref-no">${currentServiceNo}</div></div>
-          <div style="font-size:12px;color:var(--green-dark)">${todayStr()}</div>
-        </div>
-        <div class="grid-2">
-          <div class="field"><label>ชื่อผู้เบิก</label><input id="wReqBy" value="${currentUser?.displayName||''}"/></div>
-          <div class="field"><label>แผนก / ส่วนงาน</label><input id="wDept" placeholder="เช่น ฝ่าย IT"/></div>
-        </div>
-        <div class="grid-2">
-          <div class="field"><label>ใช้งานที่ (สถานที่) *</label><input id="wUsedAt" placeholder="เช่น PC-05, ห้อง A203"/></div>
-          <div class="field"><label>ใบ Service / Job Order</label>
-            <select id="wHasService"><option value="no">ไม่มี</option><option value="yes">ใบ Service</option><option value="job">Job Order</option></select>
-          </div>
-        </div>
-        <div class="field"><label>เลขที่ใบ Service / รายละเอียดงาน</label><input id="wServiceRef" placeholder="เลขที่อ้างอิง"/></div>
-        <div class="field"><label>หมายเหตุ</label><textarea id="wNote" placeholder="รายละเอียดเพิ่มเติม..."></textarea></div>
-      </div>
-
-      <div class="card" style="padding:1.25rem;margin-bottom:1rem">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px">เลือกสินค้าและชิ้นส่วน</div>
-        <div class="flex gap8 items-center" style="margin-bottom:10px">
-          <select id="wItemSel" style="flex:1;padding:8px 12px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:13px" onchange="loadWithdrawUnits()">
-            <option value="">— เลือกประเภทสินค้า —</option>
-            ${allItems.map(i=>`<option value="${i.id}">${i.id} - ${i.name} (เหลือ ${getItemQty(i.id)})</option>`).join('')}
-          </select>
-        </div>
-        <div id="wUnitList" style="font-size:13px;color:var(--text-3)">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>
-      </div>
-
-      ${withdrawUnits.length>0?`
-      <div class="card">
-        <div class="card-header"><span class="card-title">รายการที่จะเบิก (${withdrawUnits.length} ชิ้น)</span></div>
-        <div class="table-wrap">
-          <table>
-            <tr><th style="width:90px">รหัส</th><th>ชื่อสินค้า</th><th style="width:120px">S/N</th><th style="width:150px">รายละเอียด</th><th style="width:50px"></th></tr>
-            ${withdrawUnits.map((w,i)=>`
-              <tr>
-                <td class="mono text-sm text-muted">${w.itemId}</td>
-                <td>${w.itemName}</td>
-                <td>${w.sn?`<span class="badge-sn badge">${w.sn}</span>`:'<span class="text-muted text-sm">ไม่มี S/N</span>'}</td>
-                <td style="font-size:12px;color:var(--text-2)">${w.detail||'-'}</td>
-                <td><button class="btn btn-danger btn-icon" onclick="removeWithdrawUnit(${i})">✕</button></td>
-              </tr>`).join('')}
-          </table>
-        </div>
-      </div>`:`
-      <div style="text-align:center;padding:2rem;color:var(--text-3);font-size:13px;border:1.5px dashed var(--border-md);border-radius:var(--radius-lg)">
-        ยังไม่มีรายการ — เลือกสินค้าและชิ้นส่วนด้านบน
-      </div>`}
+// ═══════════════════════════════════════════════════
+// WITHDRAW TAB
+// ═══════════════════════════════════════════════════
+function renderWithdrawTab(){
+  if(!currentServiceNo)currentServiceNo=genNo();
+  document.getElementById('mainContent').innerHTML=`
+  <div class="card" style="margin-bottom:1rem;padding:1rem">
+    <div class="flex jb items-c section-gap">
+      <span style="font-size:15px;font-weight:700">📤 ใบเบิกสินค้า</span>
+      <button class="btn btn-sm" onclick="withdrawUnits=[];currentServiceNo=genNo();renderWithdrawTab()">🔄 ล้าง</button>
     </div>
+    <div class="service-ref">
+      <div><div class="service-ref-lbl">เลขที่ใบเบิก</div><div class="service-ref-no">${currentServiceNo}</div></div>
+      <div class="fz12" style="color:var(--gd)">${todayStr()}</div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>ชื่อผู้เบิก</label><input id="wReqBy" value="${currentUser?.displayName||''}"/></div>
+      <div class="field"><label>แผนก</label><input id="wDept" placeholder="เช่น ฝ่าย IT"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>ใช้งานที่ *</label><input id="wUsedAt" placeholder="เช่น PC-05"/></div>
+      <div class="field"><label>ใบ Service</label>
+        <select id="wHasService"><option value="no">ไม่มี</option><option value="yes">ใบ Service</option><option value="job">Job Order</option></select></div>
+    </div>
+    <div class="field"><label>เลขที่ / รายละเอียดงาน</label><input id="wServiceRef" placeholder="เลขที่อ้างอิง"/></div>
+    <div class="field"><label>หมายเหตุ</label><textarea id="wNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
+  </div>
 
-    <div>
-      <div class="card" style="padding:1.25rem">
-        <div style="font-size:14px;font-weight:600;margin-bottom:1rem">สรุปใบเบิก</div>
-        <div class="qr-result">
-          <div class="result-row"><span class="result-label">เลขที่ใบเบิก</span><span class="result-value mono">${currentServiceNo}</span></div>
-          <div class="result-row"><span class="result-label">จำนวนชิ้น</span><span class="result-value">${withdrawUnits.length} ชิ้น</span></div>
-          <div class="result-row"><span class="result-label">วันที่</span><span class="result-value">${todayStr()}</span></div>
-        </div>
-        <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="submitWithdraw()" ${withdrawUnits.length===0?'disabled':''}>✅ ยืนยันการเบิก</button>
-        <button class="btn" style="width:100%;justify-content:center" onclick="printWithdraw()" ${withdrawUnits.length===0?'disabled':''}>🖨️ พิมพ์ใบเบิก</button>
+  <!-- Item selector -->
+  <div class="card" style="margin-bottom:1rem;padding:1rem">
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">เลือกสินค้าและชิ้นส่วน</div>
+    <div class="field">
+      <label>ประเภทสินค้า</label>
+      <select id="wItemSel" onchange="loadWdUnits()">
+        <option value="">— เลือก —</option>
+        ${allItems.map(i=>`<option value="${i.id}">${i.id} – ${i.name} (${getItemQty(i.id)} ชิ้น)</option>`).join('')}
+      </select>
+    </div>
+    <div id="wUnitList" class="fz12 txmute">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>
+  </div>
+
+  <!-- Selected list -->
+  ${withdrawUnits.length>0?`
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-header"><span class="card-title">รายการที่จะเบิก (${withdrawUnits.length} ชิ้น)</span></div>
+    <div style="padding:.75rem 1rem">
+      <div class="wd-list">
+        ${withdrawUnits.map((w,i)=>`
+          <div class="wd-item">
+            <div class="wd-item-info">
+              <div class="wd-item-name">${w.itemName}</div>
+              <div class="wd-item-meta">${w.itemId} ${w.sn?'· S/N: '+w.sn:''} ${w.detail?'· '+w.detail:''}</div>
+            </div>
+            <button class="btn btn-icon btn-sm btn-danger" onclick="removeWd(${i})">✕</button>
+          </div>`).join('')}
       </div>
+    </div>
+  </div>`:`
+  <div class="empty-state" style="border:1.5px dashed var(--bdrm);border-radius:var(--rad)">ยังไม่มีรายการ</div>`}
+
+  <!-- Summary sticky -->
+  <div class="wd-summary-sticky">
+    <div class="flex jb items-c" style="margin-bottom:10px">
+      <div class="fz12 txmute">รวม ${withdrawUnits.length} ชิ้น · ${todayStr()}</div>
+    </div>
+    <div class="flex gap8">
+      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="submitWd()" ${withdrawUnits.length===0?'disabled':''}>✅ ยืนยันเบิก</button>
+      <button class="btn" style="flex:1;justify-content:center" onclick="printWd()" ${withdrawUnits.length===0?'disabled':''}>🖨️ พิมพ์</button>
     </div>
   </div>`;
 }
 
-function loadWithdrawUnits() {
-  const itemId = document.getElementById('wItemSel').value;
-  if (!itemId) { document.getElementById('wUnitList').innerHTML = '<div style="font-size:13px;color:var(--text-3)">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>'; return; }
-  const available = getAvailableUnits(itemId).filter(u => !withdrawUnits.find(w=>w.unitId===u.docId));
-  const item = allItems.find(i=>i.id===itemId);
-  if (available.length===0) {
-    document.getElementById('wUnitList').innerHTML = '<div style="font-size:13px;color:var(--red)">ไม่มีชิ้นส่วนพร้อมใช้</div>';
-    return;
-  }
-  document.getElementById('wUnitList').innerHTML = `
-    <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px">
-      เลือกชิ้นส่วนที่ต้องการเบิก (${available.length} ชิ้นพร้อมใช้):
-    </div>
-    <div class="unit-picker" style="max-height:220px;overflow-y:auto">
-      ${available.map(u=>`
-        <label class="unit-pick-row" id="wpick-${u.docId}">
-          <input type="checkbox" class="unit-pick-cb" value="${u.docId}" data-item="${itemId}" data-name="${item.name}" data-sn="${u.sn||''}" data-detail="${u.detail||''}"/>
+function loadWdUnits(){
+  const id=document.getElementById('wItemSel').value;
+  if(!id){document.getElementById('wUnitList').innerHTML='<div class="fz12 txmute">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>';return;}
+  const avail=getAvail(id).filter(u=>!withdrawUnits.find(w=>w.unitId===u.docId));
+  const item=allItems.find(i=>i.id===id);
+  if(!avail.length){document.getElementById('wUnitList').innerHTML='<div class="fz12" style="color:var(--r)">ไม่มีชิ้นส่วนพร้อมใช้</div>';return;}
+  document.getElementById('wUnitList').innerHTML=`
+    <div class="fz12 fw7 txm" style="margin-bottom:6px">เลือกชิ้นที่ต้องการ (${avail.length} ชิ้นพร้อมใช้):</div>
+    <div class="unit-picker">
+      ${avail.map(u=>`
+        <label class="unit-pick-row">
+          <input type="checkbox" class="upick-cb" value="${u.docId}" data-item="${id}" data-name="${item.name}" data-sn="${u.sn||''}" data-detail="${u.detail||''}"/>
           ${snBadge(u)}
-          <span style="font-size:12px;color:var(--text-2);flex:1">${u.detail||'ไม่มีรายละเอียด'}</span>
+          <span class="fz12 txm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.detail||'ไม่มีรายละเอียด'}</span>
         </label>`).join('')}
     </div>
-    <button class="btn btn-primary" style="margin-top:8px;font-size:12px" onclick="addCheckedWithdrawUnits()">+ เพิ่มรายการที่เลือก</button>`;
+    <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addCheckedWd()">+ เพิ่มที่เลือก</button>`;
 }
 
-function addCheckedWithdrawUnits() {
-  const checked = document.querySelectorAll('.unit-pick-cb:checked');
-  if (checked.length===0) { showNotif('กรุณาเลือกอย่างน้อย 1 ชิ้น','error'); return; }
-  checked.forEach(cb => {
-    if (!withdrawUnits.find(w=>w.unitId===cb.value)) {
-      withdrawUnits.push({ unitId:cb.value, itemId:cb.dataset.item, itemName:cb.dataset.name, sn:cb.dataset.sn, detail:cb.dataset.detail });
-    }
+function addCheckedWd(){
+  const cbs=[...document.querySelectorAll('.upick-cb:checked')];
+  if(!cbs.length){showNotif('เลือกอย่างน้อย 1 ชิ้น','error');return;}
+  cbs.forEach(cb=>{
+    if(!withdrawUnits.find(w=>w.unitId===cb.value))
+      withdrawUnits.push({unitId:cb.value,itemId:cb.dataset.item,itemName:cb.dataset.name,sn:cb.dataset.sn,detail:cb.dataset.detail});
   });
   renderWithdrawTab();
 }
+function removeWd(i){withdrawUnits.splice(i,1);renderWithdrawTab();}
 
-function removeWithdrawUnit(idx) { withdrawUnits.splice(idx,1); renderWithdrawTab(); }
-
-async function submitWithdraw() {
-  if (withdrawUnits.length===0) return;
-  const reqBy = document.getElementById('wReqBy')?.value||'';
-  const dept = document.getElementById('wDept')?.value||'';
-  const usedAt = document.getElementById('wUsedAt')?.value||'';
-  const hasService = document.getElementById('wHasService')?.value||'no';
-  const serviceRef = document.getElementById('wServiceRef')?.value||'';
-  const note = document.getElementById('wNote')?.value||'';
-  if (!usedAt) { showNotif('กรุณาระบุสถานที่ใช้งาน','error'); return; }
-
-  try {
-    const batch = db.batch();
-    withdrawUnits.forEach(w => {
-      batch.update(db.collection('units').doc(w.unitId), {
-        status:'used', usedAtLabel:usedAt, usedTxId:currentServiceNo,
-        usedAt:firebase.firestore.FieldValue.serverTimestamp(),
-        usedBy:currentUser.displayName
-      });
-      batch.set(db.collection('transactions').doc(), {
-        type:'out', serviceNo:currentServiceNo,
-        itemId:w.itemId, itemName:w.itemName, qty:1,
-        sn:w.sn, unitId:w.unitId, detail:w.detail,
-        usedAt, dept, reqBy, hasService, serviceRef, note,
-        userId:currentUser.uid, userEmail:currentUser.email, userName:currentUser.displayName,
-        createdAt:firebase.firestore.FieldValue.serverTimestamp()
-      });
+async function submitWd(){
+  if(!withdrawUnits.length)return;
+  const usedAt=document.getElementById('wUsedAt')?.value||'';
+  if(!usedAt){showNotif('กรุณาระบุสถานที่ใช้งาน','error');return;}
+  const reqBy=document.getElementById('wReqBy')?.value||'';
+  const dept=document.getElementById('wDept')?.value||'';
+  const hasService=document.getElementById('wHasService')?.value||'no';
+  const serviceRef=document.getElementById('wServiceRef')?.value||'';
+  const note=document.getElementById('wNote')?.value||'';
+  try{
+    const batch=db.batch();
+    withdrawUnits.forEach(w=>{
+      batch.update(db.collection('units').doc(w.unitId),{status:'used',usedAtLabel:usedAt,usedTxId:currentServiceNo,usedAt:firebase.firestore.FieldValue.serverTimestamp(),usedBy:currentUser.displayName});
+      batch.set(db.collection('transactions').doc(),{type:'out',serviceNo:currentServiceNo,itemId:w.itemId,itemName:w.itemName,qty:1,sn:w.sn,unitId:w.unitId,detail:w.detail,usedAt,dept,reqBy,hasService,serviceRef,note,userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
     });
     await batch.commit();
-    withdrawUnits.forEach(w => {
-      const u = allUnits.find(x=>x.docId===w.unitId);
-      if (u) { u.status='used'; u.usedAtLabel=usedAt; }
-    });
-    showNotif(`เบิกสำเร็จ ${withdrawUnits.length} ชิ้น — ${currentServiceNo}`);
-    const lastUnits=[...withdrawUnits];
-    const lastInfo={reqBy,dept,usedAt,hasService,serviceRef,note,serviceNo:currentServiceNo};
-    withdrawUnits=[]; currentServiceNo=genServiceNo();
+    withdrawUnits.forEach(w=>{const u=allUnits.find(x=>x.docId===w.unitId);if(u){u.status='used';u.usedAtLabel=usedAt;}});
+    showNotif(`เบิกสำเร็จ ${withdrawUnits.length} ชิ้น`);
+    const lU=[...withdrawUnits],lI={reqBy,dept,usedAt,hasService,serviceRef,note,serviceNo:currentServiceNo};
+    withdrawUnits=[];currentServiceNo=genNo();
     renderWithdrawTab();
-    if (confirm('เบิกสำเร็จ! ต้องการพิมพ์ใบเบิกหรือไม่?')) doPrint(lastUnits, lastInfo);
-  } catch(e) { showNotif(e.message,'error'); }
+    if(confirm('เบิกสำเร็จ! พิมพ์ใบเบิก?'))doPrint(lU,lI);
+  }catch(e){showNotif(e.message,'error');}
 }
-
-function printWithdraw() {
-  doPrint(withdrawUnits, {
+function printWd(){
+  doPrint(withdrawUnits,{
     reqBy:document.getElementById('wReqBy')?.value||'',
     dept:document.getElementById('wDept')?.value||'',
     usedAt:document.getElementById('wUsedAt')?.value||'',
@@ -1173,30 +1218,26 @@ function printWithdraw() {
     serviceNo:currentServiceNo
   });
 }
-
-function doPrint(units, info) {
-  const serviceTypeMap={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'};
-  document.getElementById('printArea').innerHTML = `
+function doPrint(units,info){
+  const stm={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'};
+  document.getElementById('printArea').innerHTML=`
   <div class="print-doc">
-    <div class="print-header">
-      <div class="print-title">ใบเบิกสินค้า / Spare Part Requisition</div>
-      <div style="font-size:13px">RYG Stock System</div>
-    </div>
+    <div class="print-header"><div class="print-title">ใบเบิกสินค้า / Spare Part Requisition</div><div>RYG Stock System</div></div>
     <div class="print-meta">
-      <div><div class="print-meta-label">เลขที่ใบเบิก</div><div class="print-meta-value" style="font-size:16px">${info.serviceNo}</div></div>
-      <div><div class="print-meta-label">วันที่เบิก</div><div class="print-meta-value">${todayStr()}</div></div>
-      <div><div class="print-meta-label">ชื่อผู้เบิก</div><div class="print-meta-value">${info.reqBy}</div></div>
-      <div><div class="print-meta-label">แผนก / ส่วนงาน</div><div class="print-meta-value">${info.dept||'-'}</div></div>
-      <div><div class="print-meta-label">ใช้งานที่</div><div class="print-meta-value">${info.usedAt||'-'}</div></div>
-      <div><div class="print-meta-label">ใบ Service</div><div class="print-meta-value">${serviceTypeMap[info.hasService]||'-'} ${info.serviceRef?'('+info.serviceRef+')':''}</div></div>
-      <div><div class="print-meta-label">ผู้อนุมัติ</div><div class="print-meta-value">${currentUser?.displayName||''}</div></div>
-      <div><div class="print-meta-label">Email</div><div class="print-meta-value">${currentUser?.email||''}</div></div>
+      <div><div class="pm-lbl">เลขที่ใบเบิก</div><div class="pm-val" style="font-size:16px">${info.serviceNo}</div></div>
+      <div><div class="pm-lbl">วันที่</div><div class="pm-val">${todayStr()}</div></div>
+      <div><div class="pm-lbl">ผู้เบิก</div><div class="pm-val">${info.reqBy}</div></div>
+      <div><div class="pm-lbl">แผนก</div><div class="pm-val">${info.dept||'-'}</div></div>
+      <div><div class="pm-lbl">ใช้งานที่</div><div class="pm-val">${info.usedAt||'-'}</div></div>
+      <div><div class="pm-lbl">ใบ Service</div><div class="pm-val">${stm[info.hasService]||'-'} ${info.serviceRef?'('+info.serviceRef+')':''}</div></div>
+      <div><div class="pm-lbl">ผู้อนุมัติ</div><div class="pm-val">${currentUser?.displayName||''}</div></div>
+      <div><div class="pm-lbl">Email</div><div class="pm-val">${currentUser?.email||''}</div></div>
     </div>
-    ${info.note?`<div style="background:#f5f5f5;border-radius:6px;padding:10px;margin-bottom:1rem;font-size:13px"><strong>หมายเหตุ:</strong> ${info.note}</div>`:''}
+    ${info.note?`<div style="background:#f5f5f5;border-radius:6px;padding:8px 10px;margin-bottom:1rem;font-size:12px"><b>หมายเหตุ:</b> ${info.note}</div>`:''}
     <table class="print-table">
       <tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th><th>S/N</th><th>รายละเอียด</th><th>หมายเหตุ</th></tr>
       ${units.map((w,i)=>`<tr><td>${i+1}</td><td>${w.itemId}</td><td>${w.itemName}</td><td style="font-family:monospace">${w.sn||'-'}</td><td>${w.detail||'-'}</td><td></td></tr>`).join('')}
-      <tr><td colspan="5" style="text-align:right;font-weight:700">รวมทั้งหมด</td><td style="font-weight:700">${units.length} ชิ้น</td></tr>
+      <tr><td colspan="5" style="text-align:right;font-weight:700">รวม</td><td style="font-weight:700">${units.length} ชิ้น</td></tr>
     </table>
     <div class="print-sign">
       <div class="sign-box"><div class="sign-line">ลงชื่อ ผู้เบิก<br>(${info.reqBy})</div></div>
@@ -1205,130 +1246,111 @@ function doPrint(units, info) {
   </div>`;
   document.getElementById('printArea').style.display='block';
   window.print();
-  setTimeout(()=>{ document.getElementById('printArea').style.display='none'; },1000);
+  setTimeout(()=>{document.getElementById('printArea').style.display='none';},1000);
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // HISTORY TAB
-// ============================================================
-function renderHistoryTab() {
-  const data = currentRole==='admin' ? historyData : historyData.filter(h=>h.userId===currentUser?.uid);
-  document.getElementById('mainContent').innerHTML = `
-  <div class="flex justify-between items-center section-gap">
-    <div style="font-size:15px;font-weight:600">ประวัติการเคลื่อนไหว${currentRole==='user'?' (ของฉัน)':'ทั้งหมด'}</div>
-    ${currentRole==='user'?`<div style="font-size:12px;color:var(--blue);background:var(--blue-light);padding:4px 10px;border-radius:20px">แสดงเฉพาะรายการที่คุณดำเนินการ</div>`:''}
+// ═══════════════════════════════════════════════════
+function renderHistoryTab(){
+  const data=currentRole==='admin'?historyData:historyData.filter(h=>h.userId===currentUser?.uid);
+  document.getElementById('mainContent').innerHTML=`
+  <div class="flex jb items-c section-gap">
+    <span style="font-size:15px;font-weight:700">ประวัติ${currentRole==='user'?' (ของฉัน)':''}</span>
+    ${currentRole==='user'?`<span class="badge badge-in">รายการของฉัน</span>`:''}
   </div>
-  <div class="card">
-    <div class="table-wrap">
-      <table>
-        <tr>
-          <th style="width:80px">ประเภท</th>
-          <th style="width:110px">เลขที่ใบเบิก</th>
-          <th>สินค้า</th>
-          <th style="width:130px">S/N</th>
-          <th style="width:100px">ใช้งานที่</th>
-          <th style="width:80px">ใบ Service</th>
-          ${currentRole==='admin'?'<th style="width:120px">ผู้ดำเนินการ</th>':''}
-          <th style="width:130px">วันที่-เวลา</th>
-        </tr>
-        ${data.length===0?`<tr><td colspan="${currentRole==='admin'?8:7}" style="text-align:center;color:var(--text-3);padding:2rem">ยังไม่มีรายการ</td></tr>`:
-          data.map(h=>`<tr>
-            <td>${h.type==='in'?'<span class="badge badge-in">📥 นำเข้า</span>':'<span class="badge badge-out2">📤 เบิก</span>'}</td>
-            <td class="mono text-sm text-muted">${h.serviceNo||'-'}</td>
-            <td><div class="fw600">${h.itemName}</div>${h.detail?`<div class="text-sm text-muted">${h.detail}</div>`:''}</td>
-            <td>${h.sn?`<span class="badge-sn badge">${h.sn}</span>`:'<span class="text-muted text-sm">—</span>'}</td>
-            <td style="font-size:12px">${h.usedAt||'-'}</td>
-            <td style="font-size:12px">${h.hasService==='yes'?'✅':h.hasService==='job'?'📋':'—'} ${h.serviceRef?`<span class="mono text-sm text-muted">${h.serviceRef}</span>`:''}</td>
-            ${currentRole==='admin'?`<td><div style="font-size:12px;font-weight:500">${h.userName||'-'}</div><div class="text-sm text-muted">${h.userEmail||''}</div></td>`:''}
-            <td style="font-size:12px;color:var(--text-3)">${formatDT(h.createdAt)}</td>
-          </tr>`).join('')}
-      </table>
-    </div>
-  </div>`;
+  ${data.length===0?`<div class="empty-state">ยังไม่มีรายการ</div>`:`
+  <div class="hist-list">
+    ${data.map(h=>`
+      <div class="hist-card">
+        <div class="hist-top">
+          <div class="hist-dot" style="background:${h.type==='in'?'#1D9E75':'#E24B4A'}"></div>
+          <span class="hist-item">${h.itemName}</span>
+          ${h.type==='in'?'<span class="badge badge-in">📥 นำเข้า</span>':'<span class="badge badge-out2">📤 เบิก</span>'}
+        </div>
+        ${h.sn?`<div class="hist-sn">S/N: ${h.sn}</div>`:''}
+        <div class="hist-meta">
+          ${h.usedAt?`📍 ${h.usedAt} · `:''}
+          ${h.hasService==='yes'?'✅ ใบ Service ':h.hasService==='job'?'📋 Job Order ':''}
+          ${h.serviceRef?`<span class="hist-ref">${h.serviceRef}</span> · `:''}
+          ${h.dept?h.dept+' · ':''}
+          ${currentRole==='admin'&&h.userName?h.userName+' · ':''}
+          ${formatDT(h.createdAt)}
+        </div>
+        <div class="hist-ref" style="margin-top:3px">${h.serviceNo||''}</div>
+      </div>`).join('')}
+  </div>`}`;
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // USERS TAB
-// ============================================================
-let allUsers = [];
-async function renderUsersTab() {
-  document.getElementById('mainContent').innerHTML = `
-  <div class="flex justify-between items-center section-gap">
-    <div style="font-size:15px;font-weight:600">👥 จัดการผู้ใช้งาน</div>
-    <div style="font-size:12px;color:var(--text-3)">เปลี่ยนสิทธิ์จะมีผลเมื่อ User ล็อกอินใหม่</div>
+// ═══════════════════════════════════════════════════
+let allUsers=[];
+async function renderUsersTab(){
+  document.getElementById('mainContent').innerHTML=`
+  <div class="flex jb items-c section-gap">
+    <span style="font-size:15px;font-weight:700">👥 จัดการผู้ใช้</span>
+    <span class="fz12 txmute">เปลี่ยนสิทธิ์จะมีผลเมื่อล็อกอินใหม่</span>
   </div>
-  <div class="card" id="usersCard"><div style="padding:2rem;text-align:center;color:var(--text-3)">กำลังโหลด...</div></div>`;
-  try {
-    const snap = await db.collection('users').orderBy('createdAt','desc').get();
-    allUsers = snap.docs.map(d=>({docId:d.id,...d.data()}));
+  <div class="card" id="usersCard"><div class="empty-state">กำลังโหลด...</div></div>`;
+  try{
+    const snap=await db.collection('users').orderBy('createdAt','desc').get();
+    allUsers=snap.docs.map(d=>({docId:d.id,...d.data()}));
     renderUsersTable();
-  } catch(e) {
-    document.getElementById('usersCard').innerHTML=`<div style="padding:2rem;text-align:center;color:var(--red)">โหลดไม่สำเร็จ: ${e.message}</div>`;
+  }catch(e){
+    document.getElementById('usersCard').innerHTML=`<div class="empty-state" style="color:var(--r)">โหลดไม่สำเร็จ: ${e.message}</div>`;
   }
 }
-function renderUsersTable() {
-  document.getElementById('usersCard').innerHTML = `
-  <div class="table-wrap">
-    <table>
-      <tr><th>ผู้ใช้</th><th style="width:180px">Email</th><th style="width:120px">สิทธิ์</th><th style="width:150px">เปลี่ยนสิทธิ์</th><th style="width:130px">วันที่สมัคร</th></tr>
-      ${allUsers.map(u=>{
-        const isMe=u.docId===currentUser?.uid;
-        return `<tr ${isMe?'style="background:#FFFDE7"':''}>
-          <td>
-            <div style="display:flex;align-items:center;gap:10px">
-              ${u.photoURL?`<img src="${u.photoURL}" class="user-row-avatar" onerror="this.style.display='none'"/>`:`<span class="user-row-avatar">${(u.displayName||u.email||'U')[0].toUpperCase()}</span>`}
-              <div>
-                <div style="font-weight:600;font-size:13px">${u.displayName||'(ไม่มีชื่อ)'}${isMe?' <span style="font-size:11px;color:var(--green-dark);background:var(--green-light);padding:1px 6px;border-radius:10px">คุณ</span>':''}</div>
-                <div style="font-size:11px;color:var(--text-3)">${u.docId}</div>
-              </div>
-            </div>
-          </td>
-          <td style="font-size:12px;color:var(--text-2)">${u.email||'-'}</td>
-          <td><span class="badge ${u.role==='admin'?'badge-admin':'badge-user'}">${u.role==='admin'?'🔑 Admin':'👤 User'}</span></td>
-          <td>${isMe?`<span style="font-size:12px;color:var(--text-3)">ไม่สามารถเปลี่ยนตัวเองได้</span>`:`<select class="role-select" onchange="changeUserRole('${u.docId}',this.value,this)"><option value="user" ${u.role!=='admin'?'selected':''}>👤 User</option><option value="admin" ${u.role==='admin'?'selected':''}>🔑 Admin</option></select>`}</td>
-          <td style="font-size:12px;color:var(--text-3)">${formatDT(u.createdAt)}</td>
-        </tr>`;
-      }).join('')}
-    </table>
+function renderUsersTable(){
+  document.getElementById('usersCard').innerHTML=`
+  <div style="padding:.5rem 0">
+    ${allUsers.map(u=>{
+      const isMe=u.docId===currentUser?.uid;
+      const init=(u.displayName||u.email||'U')[0].toUpperCase();
+      return`<div style="display:flex;align-items:center;gap:10px;padding:.7rem 1rem;border-bottom:1px solid var(--bdr)${isMe?';background:#FFFDE7':''}">
+        ${u.photoURL?`<img src="${u.photoURL}" class="user-ava" style="width:34px;height:34px" onerror="this.style.display='none'"/>`:`<div class="user-ava" style="width:34px;height:34px;font-size:13px">${init}</div>`}
+        <div style="flex:1;min-width:0">
+          <div class="fw7 fz12">${u.displayName||'(ไม่มีชื่อ)'}${isMe?' <span class="badge badge-ok">คุณ</span>':''}</div>
+          <div class="fz11 txmute" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email||''}</div>
+        </div>
+        ${isMe?`<span class="badge ${u.role==='admin'?'badge-admin':'badge-user'}">${u.role==='admin'?'🔑 Admin':'👤 User'}</span>`:`
+        <select style="padding:5px 8px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--font);background:var(--surf);cursor:pointer" onchange="changeRole('${u.docId}',this.value,this)">
+          <option value="user" ${u.role!=='admin'?'selected':''}>👤 User</option>
+          <option value="admin" ${u.role==='admin'?'selected':''}>🔑 Admin</option>
+        </select>`}
+      </div>`;
+    }).join('')}
   </div>
-  <div style="padding:12px 16px;background:#FAFAFA;border-top:1px solid var(--border);font-size:12px;color:var(--text-3)">
-    รวม ${allUsers.length} บัญชี · Admin ${allUsers.filter(u=>u.role==='admin').length} · User ${allUsers.filter(u=>u.role!=='admin').length}
+  <div style="padding:.6rem 1rem;background:#FAFAFA;border-top:1px solid var(--bdr);font-size:11px;color:var(--tx3)">
+    ${allUsers.length} บัญชี · Admin ${allUsers.filter(u=>u.role==='admin').length} · User ${allUsers.filter(u=>u.role!=='admin').length}
   </div>`;
 }
-
-async function changeUserRole(uid, newRole, selectEl) {
-  const user = allUsers.find(u=>u.docId===uid);
-  if (!user) return;
-  const oldRole = user.role||'user';
-  if (oldRole===newRole) return;
-  if (!confirm(`เปลี่ยนสิทธิ์ "${user.displayName||user.email}" เป็น ${newRole}?`)) { selectEl.value=oldRole; return; }
-  try {
-    await db.collection('users').doc(uid).update({ role:newRole });
-    user.role=newRole;
-    showNotif(`เปลี่ยนสิทธิ์สำเร็จ`);
-    renderUsersTable();
-  } catch(e) { showNotif('ไม่สำเร็จ: '+e.message,'error'); selectEl.value=oldRole; }
+async function changeRole(uid,newRole,el){
+  const user=allUsers.find(u=>u.docId===uid);if(!user)return;
+  const oldRole=user.role||'user';if(oldRole===newRole)return;
+  if(!confirm(`เปลี่ยนสิทธิ์ "${user.displayName||user.email}" เป็น ${newRole}?`)){el.value=oldRole;return;}
+  try{await db.collection('users').doc(uid).update({role:newRole});user.role=newRole;showNotif('เปลี่ยนสิทธิ์สำเร็จ');renderUsersTable();}
+  catch(e){showNotif('ไม่สำเร็จ: '+e.message,'error');el.value=oldRole;}
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // MODAL
-// ============================================================
-function showModal(html, xl=false) {
-  const div = document.createElement('div');
-  div.className='modal-overlay'; div.id='modalOverlay';
-  div.innerHTML=`<div class="modal ${xl?'modal-xl':'modal-lg'}">${html}</div>`;
-  div.addEventListener('click',e=>{ if(e.target===div) closeModal(); });
+// ═══════════════════════════════════════════════════
+function showModal(html,wide=false){
+  const div=document.createElement('div');
+  div.className='modal-overlay';div.id='modalOverlay';
+  div.innerHTML=`<div class="modal ${wide?'modal-lg':''}">${html}</div>`;
+  div.addEventListener('click',e=>{if(e.target===div)closeModal();});
   document.body.appendChild(div);
 }
-function closeModal() { const m=document.getElementById('modalOverlay'); if(m) m.remove(); }
+function closeModal(){const m=document.getElementById('modalOverlay');if(m)m.remove();}
 
-// ============================================================
+// ═══════════════════════════════════════════════════
 // NOTIF
-// ============================================================
-function showNotif(msg, type='ok') {
+// ═══════════════════════════════════════════════════
+function showNotif(msg,type='ok'){
   const n=document.getElementById('notif');
-  n.textContent=msg;
-  n.className='notif show'+(type==='error'?' error':'');
+  n.textContent=msg;n.className='notif show'+(type==='error'?' error':'');
   setTimeout(()=>n.className='notif',2800);
 }
 </script>
