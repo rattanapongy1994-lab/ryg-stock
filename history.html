@@ -41,7 +41,6 @@
 <script>
 let currentUser=null, currentRole='user', db=null;
 let historyData=[], filterType='all', searchQ='';
-// BUG FIX: unsubscribe ก่อนที่จะ subscribe ใหม่ (prevent listener leak)
 let _histUnsub=null;
 
 initShell('history', (user, role, firestore) => {
@@ -50,21 +49,42 @@ initShell('history', (user, role, firestore) => {
 });
 
 function subscribeHistory(){
-  // BUG FIX: cleanup listener เก่าก่อน
   if(_histUnsub){ _histUnsub(); _histUnsub=null; }
 
-  let q=db.collection('transactions').orderBy('createdAt','desc').limit(500);
-  if(currentRole!=='admin') q=q.where('userId','==',currentUser.uid);
-  _histUnsub=q.onSnapshot(snap=>{
-    historyData=snap.docs.map(d=>({id:d.id,...d.data()}));
+  // BUG FIX: ใช้แค่ orderBy('createdAt') ไม่มี .where() เพิ่ม
+  // เพื่อหลีกเลี่ยง composite index ที่ต้องสร้างใน Firestore console
+  // กรอง userId ฝั่ง client แทน
+  const q = db.collection('transactions').orderBy('createdAt','desc').limit(500);
+
+  _histUnsub = q.onSnapshot(snap => {
+    let docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    // กรอง user ปกติให้เห็นแค่ของตัวเอง (client-side)
+    if(currentRole !== 'admin'){
+      docs = docs.filter(h => h.userId === currentUser.uid);
+    }
+    historyData = docs;
     renderHistory();
-  }, err=>{
-    console.error('History listener error:', err);
-    showNotif('โหลดประวัติไม่สำเร็จ','error');
+  }, err => {
+    console.error('History error:', err);
+    // Fallback: ถ้า snapshot ไม่ได้ ลอง get แบบ one-time
+    loadHistoryOnce();
   });
 }
 
-// BUG FIX: safeFormatDT — กัน crash ถ้า formatDT ยังไม่พร้อม หรือ input null
+async function loadHistoryOnce(){
+  try{
+    const snap = await db.collection('transactions').orderBy('createdAt','desc').limit(500).get();
+    let docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    if(currentRole !== 'admin'){
+      docs = docs.filter(h => h.userId === currentUser.uid);
+    }
+    historyData = docs;
+    renderHistory();
+  }catch(e){
+    document.getElementById('mainContent').innerHTML=`<div class="empty-state" style="color:var(--r)">โหลดประวัติไม่สำเร็จ: ${e.message}</div>`;
+  }
+}
+
 function safeFormatDT(ts){
   try{ return (typeof formatDT==='function') ? formatDT(ts) : ''; }
   catch(e){ return ''; }
@@ -107,7 +127,7 @@ function renderHistory(){
       ${isAdmin?`<button class="btn btn-sm" onclick="exportHistory()" title="Export ประวัติเป็น Excel">📥 Export</button>`:''}
     </div>
   </div>
-  <div class="fz12 txmute" style="margin-bottom:.7rem">${data.length} รายการ${historyData.length>data.length?' (กรองจาก '+historyData.length+')'':''}</div>
+  <div class="fz12 txmute" style="margin-bottom:.7rem">${data.length} รายการ${historyData.length>data.length?' (กรองจาก '+historyData.length+')':''}</div>
   ${data.length===0?`<div class="empty-state">ยังไม่มีรายการ</div>`:`
   <div class="hist-list">
     ${data.map(h=>`
@@ -131,7 +151,6 @@ function renderHistory(){
   </div>`}`;
 }
 
-// ── Export ประวัติเป็น Excel ──
 function exportHistory(){
   const data=getFilteredData();
   if(!data.length){ showNotif('ไม่มีข้อมูลที่จะ Export','error'); return; }
@@ -154,32 +173,29 @@ function exportHistory(){
   ws['!cols']=[{wch:10},{wch:18},{wch:10},{wch:28},{wch:18},{wch:8},{wch:14},{wch:12},{wch:16},{wch:12},{wch:16},{wch:20},{wch:20}];
   XLSX.utils.book_append_sheet(wb,ws,'ประวัติ');
 
-  // แยก sheet เบิกออก / นำเข้า
   const outRows=data.filter(h=>h.type==='out');
   const inRows=data.filter(h=>h.type==='in');
   if(outRows.length){
     const outWs=XLSX.utils.aoa_to_sheet([rows[0],...outRows.map(h=>{
-      let dateStr='';
-      try{ if(h.createdAt?.toDate) dateStr=h.createdAt.toDate().toLocaleString('th-TH'); }catch(e){}
-      const svcTH={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'}[h.hasService]||'';
-      return['📤 เบิก',h.serviceNo||'',h.itemId||'',h.itemName||'',h.sn||'-',h.qty||1,h.usedAt||'',h.dept||'',h.userName||'',svcTH,h.serviceRef||'',h.note||'',dateStr];
+      let ds=''; try{ if(h.createdAt?.toDate) ds=h.createdAt.toDate().toLocaleString('th-TH'); }catch(e){}
+      const sv={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'}[h.hasService]||'';
+      return['📤 เบิก',h.serviceNo||'',h.itemId||'',h.itemName||'',h.sn||'-',h.qty||1,h.usedAt||'',h.dept||'',h.userName||'',sv,h.serviceRef||'',h.note||'',ds];
     })]);
     outWs['!cols']=ws['!cols'];
     XLSX.utils.book_append_sheet(wb,outWs,'เบิกออก');
   }
   if(inRows.length){
     const inWs=XLSX.utils.aoa_to_sheet([rows[0],...inRows.map(h=>{
-      let dateStr='';
-      try{ if(h.createdAt?.toDate) dateStr=h.createdAt.toDate().toLocaleString('th-TH'); }catch(e){}
-      return['📥 นำเข้า',h.serviceNo||'',h.itemId||'',h.itemName||'',h.sn||'-',h.qty||1,'','','',h.userName||'','','',dateStr];
+      let ds=''; try{ if(h.createdAt?.toDate) ds=h.createdAt.toDate().toLocaleString('th-TH'); }catch(e){}
+      return['📥 นำเข้า',h.serviceNo||'',h.itemId||'',h.itemName||'',h.sn||'-',h.qty||1,'','',h.userName||'','','','',ds];
     })]);
     inWs['!cols']=ws['!cols'];
     XLSX.utils.book_append_sheet(wb,inWs,'นำเข้า');
   }
 
   const now=new Date();
-  const dateStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  XLSX.writeFile(wb,`RYG_History_${dateStr}.xlsx`);
+  const ds=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb,`RYG_History_${ds}.xlsx`);
   showNotif(`Export ${data.length} รายการสำเร็จ`);
 }
 </script>
