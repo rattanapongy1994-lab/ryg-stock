@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RYG Stock System</title>
+
+<!-- Firebase SDK v10 -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root {
+    --green: #1D9E75; --green-dark: #0F6E56; --green-light: #E1F5EE;
+    --blue: #185FA5; --blue-light: #E6F1FB;
+    --amber: #854F0B; --amber-light: #FAEEDA;
+    --red: #A32D2D; --red-light: #FCEBEB;
+    --bg: #F4F6F9; --surface: #fff;
+    --border: rgba(0,0,0,0.1); --border-md: rgba(0,0,0,0.18);
+    --text: #1a1a1a; --text-2: #555; --text-3: #888;
+    --radius: 8px; --radius-lg: 12px;
+    --font: 'Sarabun', 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* ========== LOGIN ========== */
+  #loginScreen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #0F6E56 0%, #1D9E75 50%, #5DCAA5 100%);
+  }
+  .login-card {
+    background: var(--surface); border-radius: 16px; padding: 2.5rem;
+    width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  }
+  .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 2rem; }
+  .logo-icon {
+    width: 48px; height: 48px; background: var(--green); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .login-card h1 { font-size: 20px; font-weight: 700; }
+  .login-card p { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+  .btn-google {
+    width: 100%; padding: 12px; border: 1.5px solid var(--border-md); border-radius: var(--radius);
+    background: var(--surface); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; gap: 10px; font-size: 14px; font-weight: 500; color: var(--text);
+    transition: background .15s;
+  }
+  .btn-google:hover { background: #f5f5f5; }
+  .google-icon { width: 20px; height: 20px; }
+  .login-note { font-size: 12px; color: var(--text-3); text-align: center; margin-top: 1rem; }
+
+  /* ========== LAYOUT ========== */
+  #mainApp { display: none; flex-direction: column; min-height: 100vh; }
+  .topbar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem; height: 56px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 50;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-logo {
+    width: 32px; height: 32px; background: var(--green); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .topbar-title { font-size: 16px; font-weight: 700; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border-radius: 20px; padding: 4px 12px 4px 4px;
+  }
+  .user-avatar {
+    width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+    background: var(--green-light); display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 700; color: var(--green-dark);
+  }
+  .user-name { font-size: 13px; font-weight: 500; }
+  .badge-role {
+    padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  }
+  .badge-admin { background: var(--green-light); color: var(--green-dark); }
+  .badge-user { background: var(--blue-light); color: var(--blue); }
+  .btn-logout {
+    padding: 6px 14px; border: 1px solid var(--border-md); border-radius: var(--radius);
+    background: transparent; cursor: pointer; font-size: 13px; color: var(--text-2);
+  }
+  .btn-logout:hover { background: var(--bg); }
+
+  .nav-tabs {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem; display: flex; gap: 0;
+  }
+  .nav-tab {
+    padding: 12px 18px; font-size: 13px; color: var(--text-2); cursor: pointer;
+    border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .nav-tab.active { color: var(--green); border-bottom-color: var(--green); font-weight: 600; }
+  .nav-tab:hover:not(.active) { color: var(--text); }
+
+  .content { padding: 1.5rem; flex: 1; }
+
+  /* ========== CARDS ========== */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.25rem;
+  }
+  .stat-label { font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+  .stat-value { font-size: 26px; font-weight: 700; }
+  .stat-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden;
+  }
+  .card-header {
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-title { font-size: 14px; font-weight: 600; }
+
+  /* ========== TABLE ========== */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th {
+    padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600;
+    color: var(--text-3); background: #FAFAFA; border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #FAFAFA; }
+
+  /* ========== BADGES ========== */
+  .badge { display: inline-flex; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-ok { background: var(--green-light); color: var(--green-dark); }
+  .badge-low { background: var(--amber-light); color: var(--amber); }
+  .badge-out { background: var(--red-light); color: var(--red); }
+  .badge-in { background: var(--green-light); color: var(--green-dark); }
+  .badge-out2 { background: var(--red-light); color: var(--red); }
+
+  /* ========== BUTTONS ========== */
+  .btn { padding: 7px 14px; border-radius: var(--radius); font-size: 13px; cursor: pointer; border: 1px solid var(--border-md); background: var(--surface); color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { background: var(--bg); }
+  .btn-primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .btn-primary:hover { background: var(--green-dark); }
+  .btn-danger { background: var(--red-light); color: var(--red); border-color: #F09595; }
+  .btn-icon { padding: 5px 8px; border-radius: 6px; }
+
+  /* ========== FORM ========== */
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border-md);
+    border-radius: var(--radius); font-size: 13px; font-family: var(--font);
+    background: var(--surface); color: var(--text);
+  }
+  .field textarea { resize: vertical; min-height: 72px; }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none; border-color: var(--green);
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ========== MODAL ========== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center; z-index: 200;
+  }
+  .modal {
+    background: var(--surface); border-radius: 14px; padding: 1.75rem;
+    width: 520px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+  }
+  .modal-lg { width: 680px; }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 1.25rem; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+
+  /* ========== QR ========== */
+  .qr-panel {
+    max-width: 520px; margin: 0 auto;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 2rem;
+  }
+  .qr-box {
+    width: 200px; height: 200px; border: 2px dashed var(--border-md);
+    border-radius: var(--radius-lg); margin: 1.5rem auto;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; cursor: pointer; color: var(--text-3);
+    font-size: 13px; overflow: hidden; position: relative;
+  }
+  .qr-box:hover { border-color: var(--green); color: var(--green); }
+  .scan-line {
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--green); animation: scanAnim 1.8s ease-in-out infinite;
+  }
+  @keyframes scanAnim { 0%{top:0} 50%{top:calc(100% - 3px)} 100%{top:0} }
+  .qr-result {
+    background: var(--bg); border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin: 1rem 0;
+  }
+  .result-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .result-label { font-size: 12px; color: var(--text-3); }
+  .result-value { font-size: 13px; font-weight: 600; }
+  .op-tabs { display: flex; gap: 8px; margin: 1rem 0; }
+  .op-tab {
+    flex: 1; padding: 10px; border: 1px solid var(--border-md);
+    border-radius: var(--radius); cursor: pointer; font-size: 13px;
+    font-weight: 500; text-align: center; color: var(--text-2); background: var(--bg);
+  }
+  .op-tab.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .qty-row { display: flex; align-items: center; gap: 10px; margin: 1rem 0; }
+  .qty-btn {
+    width: 36px; height: 36px; border: 1px solid var(--border-md); border-radius: var(--radius);
+    background: var(--bg); cursor: pointer; font-size: 20px; font-weight: 300;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .qty-input {
+    width: 70px; text-align: center; padding: 8px; border: 1px solid var(--border-md);
+    border-radius: var(--radius); font-size: 16px; font-weight: 700;
+  }
+
+  /* ========== HISTORY ========== */
+  .hist-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ========== SERVICE FORM ========== */
+  .service-ref {
+    background: var(--green-light); border-radius: var(--radius);
+    padding: 10px 14px; margin-bottom: 1rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .service-ref-label { font-size: 12px; color: var(--green-dark); }
+  .service-ref-no { font-size: 18px; font-weight: 700; color: var(--green-dark); font-family: monospace; }
+
+  /* ========== PRINT ========== */
+  @media print {
+    #mainApp, .topbar, .nav-tabs, .content { display: none !important; }
+    #printArea { display: block !important; }
+  }
+  #printArea { display: none; }
+  .print-doc {
+    max-width: 750px; margin: 0 auto; padding: 2rem; font-family: 'Sarabun', sans-serif;
+  }
+  .print-header { text-align: center; margin-bottom: 1.5rem; border-bottom: 2px solid #000; padding-bottom: 1rem; }
+  .print-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .print-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 1rem 0; }
+  .print-meta-item { }
+  .print-meta-label { font-size: 11px; color: #666; }
+  .print-meta-value { font-size: 13px; font-weight: 600; }
+  .print-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  .print-table th, .print-table td { border: 1px solid #ccc; padding: 8px 10px; font-size: 13px; }
+  .print-table th { background: #f0f0f0; font-weight: 700; }
+  .print-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 3rem; }
+  .sign-box { text-align: center; }
+  .sign-line { border-top: 1px solid #000; margin-top: 3rem; padding-top: 6px; font-size: 12px; }
+
+  /* ========== NOTIF ========== */
+  #notif {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--green); color: #fff; padding: 12px 20px;
+    border-radius: var(--radius); font-size: 13px; font-weight: 500;
+    opacity: 0; transition: opacity .3s; z-index: 999; pointer-events: none;
+  }
+  #notif.show { opacity: 1; }
+  #notif.error { background: var(--red); }
+
+  /* ========== LOADING ========== */
+  #loadingScreen {
+    position: fixed; inset: 0; background: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .spinner {
+    width: 40px; height: 40px; border: 3px solid var(--green-light);
+    border-top-color: var(--green); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ========== UTILS ========== */
+  .search-bar { display: flex; gap: 8px; align-items: center; }
+  .search-input {
+    padding: 7px 12px; border: 1px solid var(--border-md); border-radius: var(--radius);
+    font-size: 13px; width: 220px; background: var(--surface); color: var(--text);
+  }
+  .bar-bg { background: #E5E7EB; border-radius: 4px; height: 7px; }
+  .bar-fill { background: var(--green); height: 7px; border-radius: 4px; transition: width .4s; }
+  .section-gap { margin-bottom: 1.5rem; }
+  .flex { display: flex; }
+  .gap8 { gap: 8px; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .text-sm { font-size: 12px; }
+  .text-muted { color: var(--text-3); }
+  .mono { font-family: monospace; }
+  .fw600 { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingScreen">
+  <div style="width:48px;height:48px;background:var(--green);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:1rem;">📦</div>
+  <div style="font-size:16px;font-weight:600;margin-bottom:1rem;">RYG Stock System</div>
+  <div class="spinner"></div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen" style="display:none;">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">📦</div>
+      <div>
+        <h1>RYG Stock System</h1>
+        <p>ระบบจัดการสต็อก Spare Part</p>
+      </div>
+    </div>
+    <button class="btn-google" onclick="signInGoogle()">
+      <svg class="google-icon" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      เข้าสู่ระบบด้วย Google
+    </button>
+    <div class="login-note">ระบบจะตรวจสอบสิทธิ์จาก Email ที่กำหนดไว้ใน Firestore<br>Admin ต้องได้รับการอนุมัติจากผู้ดูแลระบบ</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">📦</div>
+      <span class="topbar-title">RYG Stock System</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-chip">
+        <img id="userAvatar" class="user-avatar" src="" onerror="this.style.display='none'" alt=""/>
+        <span id="userAvatarFallback" class="user-avatar"></span>
+        <span id="userDisplayName" class="user-name"></span>
+      </div>
+      <span id="roleLabel" class="badge-role badge-admin">Admin</span>
+      <button class="btn-logout" onclick="doLogout()">ออกจากระบบ</button>
+    </div>
+  </div>
+  <div class="nav-tabs" id="navTabs">
+    <div class="nav-tab active" id="nav-dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
+    <div class="nav-tab" id="nav-stock" onclick="showTab('stock')">📦 สต็อกสินค้า</div>
+    <div class="nav-tab" id="nav-qr" onclick="showTab('qr')">📷 สแกน QR</div>
+    <div class="nav-tab" id="nav-withdraw" onclick="showTab('withdraw')">📤 เบิกสินค้า</div>
+    <div class="nav-tab" id="nav-history" onclick="showTab('history')">🕐 ประวัติ</div>
+  </div>
+  <div class="content" id="mainContent">
+    <div style="text-align:center;padding:3rem;color:var(--text-3);">กำลังโหลด...</div>
+  </div>
+</div>
+
+<!-- PRINT AREA -->
+<div id="printArea"></div>
+
+<div id="notif"></div>
+
+<script>
+// ============================================================
+// 🔧 FIREBASE CONFIG — แก้ไขตรงนี้ด้วย config จาก Firebase Console
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyABKbRCDNh5SHwvbuFtAudLnRYepZfXk7s",
+  authDomain: "ryg-stock.firebaseapp.com",
+  projectId: "ryg-stock",
+  storageBucket: "ryg-stock.firebasestorage.app",
+  messagingSenderId: "338213551131",
+  appId: "1:338213551131:web:153773df4f8111b2364cbe",
+  measurementId: "G-ZG4Z0T6S7H"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ============================================================
+// STATE
+// ============================================================
+let currentUser = null;
+let currentRole = 'user';
+let currentTab = 'dashboard';
+let allItems = [];
+let searchQ = '';
+let scanStep = 0, scanOp = 'out', scanQty = 1, scannedItem = null;
+let withdrawItems = [];
+let currentServiceNo = '';
+
+// ============================================================
+// AUTH
+// ============================================================
+auth.onAuthStateChanged(async (user) => {
+  document.getElementById('loadingScreen').style.display = 'none';
+  if (!user) {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'none';
+    return;
+  }
+  currentUser = user;
+  await loadUserRole(user);
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'flex';
+  updateUserUI();
+  await loadItems();
+  showTab('dashboard');
+  subscribeHistory();
+});
+
+async function loadUserRole(user) {
+  try {
+    const doc = await db.collection('users').doc(user.uid).get();
+    if (doc.exists) {
+      currentRole = doc.data().role || 'user';
+    } else {
+      // สร้าง user record ใหม่ — default เป็น user
+      await db.collection('users').doc(user.uid).set({
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        role: 'user',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      currentRole = 'user';
+    }
+  } catch(e) {
+    console.error(e);
+    currentRole = 'user';
+  }
+}
+
+function updateUserUI() {
+  document.getElementById('userDisplayName').textContent = currentUser.displayName || currentUser.email;
+  const avatar = document.getElementById('userAvatar');
+  const fallback = document.getElementById('userAvatarFallback');
+  if (currentUser.photoURL) {
+    avatar.src = currentUser.photoURL;
+    avatar.style.display = '';
+    fallback.style.display = 'none';
+  } else {
+    avatar.style.display = 'none';
+    fallback.style.display = '';
+    fallback.textContent = (currentUser.displayName || currentUser.email || 'U')[0].toUpperCase();
+  }
+  const rl = document.getElementById('roleLabel');
+  rl.textContent = currentRole === 'admin' ? 'Admin' : 'User';
+  rl.className = 'badge-role ' + (currentRole === 'admin' ? 'badge-admin' : 'badge-user');
+}
+
+function signInGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(e => showNotif(e.message, 'error'));
+}
+
+function doLogout() {
+  auth.signOut();
+}
+
+// ============================================================
+// FIRESTORE — ITEMS
+// ============================================================
+async function loadItems() {
+  const snap = await db.collection('items').orderBy('id').get();
+  allItems = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+  // Seed ถ้าว่างเปล่า
+  if (allItems.length === 0) await seedItems();
+}
+
+async function seedItems() {
+  const seed = [
+    {id:'SP001',name:'SSD (128GB)',qty:3,min:2,loc:'ชั้นเก็บของ IT',cat:'Storage'},
+    {id:'SP002',name:'SSD (240GB)',qty:1,min:2,loc:'ชั้นเก็บของ IT',cat:'Storage'},
+    {id:'SP003',name:'HDD 320GB',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Storage'},
+    {id:'SP004',name:'HDD 500GB',qty:11,min:3,loc:'ชั้นเก็บของ IT',cat:'Storage'},
+    {id:'SP005',name:'HDD 1TB',qty:16,min:3,loc:'ชั้นเก็บของ IT',cat:'Storage'},
+    {id:'SP006',name:'HDD 2TB',qty:3,min:1,loc:'ชั้นเก็บของ IT',cat:'Storage'},
+    {id:'SP007',name:'RAM PC3 8GB',qty:2,min:2,loc:'ชั้นเก็บของ IT',cat:'Memory'},
+    {id:'SP008',name:'RAM PC3 4GB',qty:17,min:3,loc:'ชั้นเก็บของ IT',cat:'Memory'},
+    {id:'SP009',name:'RAM PC3 2GB',qty:5,min:2,loc:'ชั้นเก็บของ IT',cat:'Memory'},
+    {id:'SP010',name:'RAM PC4 4GB',qty:4,min:2,loc:'ชั้นเก็บของ IT',cat:'Memory'},
+    {id:'SP011',name:'CPU',qty:19,min:3,loc:'ชั้นเก็บของ IT',cat:'Component'},
+    {id:'SP012',name:'GPU',qty:8,min:2,loc:'ชั้นเก็บของ IT',cat:'Component'},
+    {id:'SP013',name:'PCI USB Card 4 Port',qty:0,min:1,loc:'ชั้นเก็บของ IT',cat:'Component'},
+    {id:'SP014',name:'PCI USB Card 2 Port',qty:5,min:2,loc:'ชั้นเก็บของ IT',cat:'Component'},
+    {id:'SP015',name:'PCI Network Adapter',qty:6,min:2,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP016',name:'Power Supply 550W Bronze',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Component'},
+    {id:'SP017',name:'Power Supply DELL 240V',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Component'},
+    {id:'SP018',name:'Switch ZYXEL 16 Port',qty:2,min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP019',name:'Switch ZYXEL 24 Port',qty:2,min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP020',name:'Switch Aruba 24G 4SFP',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP021',name:'Switch D-Link 8 Port',qty:2,min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP022',name:'Switch D-Link 16 Port',qty:7,min:2,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP023',name:'Switch D-Link 24 Port',qty:2,min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP024',name:'Switch Dahua POE 8-Port',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Network'},
+    {id:'SP025',name:'กล้อง Dahua IP Camera',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Camera'},
+    {id:'SP026',name:'กล้อง Starcam IP Camera',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Camera'},
+    {id:'SP027',name:'VGA to HDMI',qty:3,min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP028',name:'HDMI to VGA',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP029',name:'DisplayPort to HDMI',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP030',name:'DisplayPort to VGA',qty:4,min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP031',name:'สาย AC Power',qty:20,min:5,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP032',name:'สาย VGA',qty:18,min:5,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP033',name:'สาย DisplayPort',qty:7,min:2,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP034',name:'สาย HDMI',qty:10,min:3,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP035',name:'สาย Printer USB',qty:10,min:3,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP036',name:'สายแลน OUTDOOR CAT6',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP037',name:'สายแลน OUTDOOR Sling CAT6',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP038',name:'หัวสายแลน CAT6 RJ45',qty:12,min:5,loc:'ชั้นเก็บของ IT',cat:'Cable'},
+    {id:'SP039',name:'Adapter 12V 2A',qty:7,min:2,loc:'ชั้นเก็บของ IT',cat:'Power'},
+    {id:'SP040',name:'Switching Power Supply 5A',qty:3,min:1,loc:'ชั้นเก็บของ IT',cat:'Power'},
+    {id:'SP041',name:'Switching Power Supply 20A',qty:2,min:1,loc:'ชั้นเก็บของ IT',cat:'Power'},
+    {id:'SP042',name:'Switching Power Supply 10A',qty:1,min:1,loc:'ชั้นเก็บของ IT',cat:'Power'},
+    {id:'SP043',name:'Monitor',qty:7,min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
+    {id:'SP044',name:'Computer',qty:3,min:1,loc:'ชั้นเก็บของ IT',cat:'Device'},
+    {id:'SP045',name:'Keyboard',qty:5,min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
+    {id:'SP046',name:'Mouse',qty:4,min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
+    {id:'SP047',name:'Webcam',qty:9,min:2,loc:'ชั้นเก็บของ IT',cat:'Device'},
+    {id:'SP048',name:'ลำโพงเล็กสีดำ',qty:3,min:1,loc:'ชั้นเก็บของ IT',cat:'Device'},
+    {id:'SP049',name:'Printer',qty:3,min:1,loc:'ชั้นเก็บของ IT',cat:'Device'},
+  ];
+  const batch = db.batch();
+  seed.forEach(item => {
+    const ref = db.collection('items').doc(item.id);
+    batch.set(ref, item);
+  });
+  await batch.commit();
+  await loadItems();
+}
+
+// ============================================================
+// HISTORY real-time subscription
+// ============================================================
+let historyData = [];
+let historyUnsub = null;
+
+function subscribeHistory() {
+  if (historyUnsub) historyUnsub();
+  historyUnsub = db.collection('transactions')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(snap => {
+      historyData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (currentTab === 'history') renderHistoryTab();
+      if (currentTab === 'dashboard') renderDashboardTab();
+    });
+}
+
+// ============================================================
+// TAB ROUTING
+// ============================================================
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  const navEl = document.getElementById('nav-' + tab);
+  if (navEl) navEl.classList.add('active');
+  const c = document.getElementById('mainContent');
+  if (tab === 'dashboard') renderDashboardTab();
+  else if (tab === 'stock') renderStockTab();
+  else if (tab === 'qr') renderQRTab();
+  else if (tab === 'withdraw') renderWithdrawTab();
+  else if (tab === 'history') renderHistoryTab();
+}
+
+// ============================================================
+// STATUS HELPERS
+// ============================================================
+function getStatus(item) {
+  if (item.qty <= 0) return 'out';
+  if (item.qty <= item.min) return 'low';
+  return 'ok';
+}
+function statusBadge(item) {
+  const s = getStatus(item);
+  if (s === 'out') return '<span class="badge badge-out">หมดสต็อก</span>';
+  if (s === 'low') return '<span class="badge badge-low">ใกล้หมด</span>';
+  return '<span class="badge badge-ok">ปกติ</span>';
+}
+function formatDT(ts) {
+  if (!ts) return '-';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' })
+    + ' ' + d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+}
+function todayStr() {
+  return new Date().toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDashboardTab() {
+  const total = allItems.reduce((a, i) => a + i.qty, 0);
+  const out = allItems.filter(i => i.qty <= 0).length;
+  const low = allItems.filter(i => i.qty > 0 && i.qty <= i.min).length;
+  const cats = {};
+  allItems.forEach(i => { cats[i.cat] = (cats[i.cat] || 0) + i.qty; });
+  const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxVal = topCats[0] ? topCats[0][1] : 1;
+  const recent = historyData.slice(0, 8);
+  const alertItems = allItems.filter(i => getStatus(i) !== 'ok').slice(0, 10);
+
+  document.getElementById('mainContent').innerHTML = `
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">รายการสินค้า</div>
+      <div class="stat-value">${allItems.length}</div>
+      <div class="stat-sub">รายการทั้งหมด</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">สต็อกรวม</div>
+      <div class="stat-value">${total}</div>
+      <div class="stat-sub">ชิ้น</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label" style="color:var(--amber)">ใกล้หมด</div>
+      <div class="stat-value" style="color:var(--amber)">${low}</div>
+      <div class="stat-sub">รายการ</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label" style="color:var(--red)">หมดสต็อก</div>
+      <div class="stat-value" style="color:var(--red)">${out}</div>
+      <div class="stat-sub">รายการ</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+    <div class="card">
+      <div class="card-header"><span class="card-title">สต็อกตามหมวดหมู่</span></div>
+      <div style="padding:1.25rem">
+        ${topCats.map(([cat, val]) => `
+          <div style="margin-bottom:12px">
+            <div class="flex justify-between text-sm" style="margin-bottom:4px">
+              <span>${cat}</span><span class="text-muted">${val} ชิ้น</span>
+            </div>
+            <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">ความเคลื่อนไหวล่าสุด</span>
+      </div>
+      <div style="padding:1.25rem">
+        ${recent.length === 0 ? '<p style="color:var(--text-3);font-size:13px">ยังไม่มีรายการ</p>' :
+          recent.map(h => `
+            <div class="flex gap8 items-center" style="margin-bottom:10px">
+              <div class="hist-dot" style="background:${h.type==='in'?'#1D9E75':'#E24B4A'}"></div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500">${h.type==='in'?'นำเข้า':'เบิก'} ${h.itemName} (${h.qty} ชิ้น)</div>
+                <div style="font-size:11px;color:var(--text-3)">${h.userName} · ${h.usedAt||''}</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-3)">${formatDT(h.createdAt)}</div>
+            </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  ${alertItems.length > 0 ? `
+  <div class="card">
+    <div class="card-header"><span class="card-title">⚠️ รายการที่ต้องจัดการ</span></div>
+    <div class="table-wrap">
+      <table>
+        <tr><th style="width:90px">รหัส</th><th>รายการ</th><th style="width:80px;text-align:center">คงเหลือ</th><th style="width:110px">สถานะ</th></tr>
+        ${alertItems.map(i => `
+          <tr>
+            <td class="mono text-sm text-muted">${i.id}</td>
+            <td class="fw600">${i.name}</td>
+            <td style="text-align:center;font-weight:600">${i.qty}</td>
+            <td>${statusBadge(i)}</td>
+          </tr>`).join('')}
+      </table>
+    </div>
+  </div>` : ''}`;
+}
+
+// ============================================================
+// STOCK TAB
+// ============================================================
+function renderStockTab() {
+  const isAdmin = currentRole === 'admin';
+  const q = searchQ.toLowerCase();
+  const filtered = allItems.filter(i =>
+    !q || i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || i.cat.toLowerCase().includes(q)
+  );
+  document.getElementById('mainContent').innerHTML = `
+  <div class="flex justify-between items-center section-gap">
+    <div style="font-size:15px;font-weight:600">สต็อกสินค้า (${filtered.length} รายการ)</div>
+    <div class="search-bar">
+      <input class="search-input" placeholder="ค้นหา รหัส / ชื่อ / หมวดหมู่..." value="${searchQ}"
+        oninput="searchQ=this.value;renderStockTab()" />
+      ${isAdmin ? `<button class="btn btn-primary" onclick="openAddItem()">+ เพิ่มรายการ</button>` : ''}
+    </div>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th style="width:90px">รหัส</th>
+          <th>ชื่อสินค้า</th>
+          <th style="width:90px">หมวดหมู่</th>
+          <th style="width:80px;text-align:center">คงเหลือ</th>
+          <th style="width:80px;text-align:center">ขั้นต่ำ</th>
+          <th style="width:130px">สถานที่</th>
+          <th style="width:100px">สถานะ</th>
+          ${isAdmin ? '<th style="width:120px">จัดการ</th>' : ''}
+        </tr>
+        ${filtered.map(item => `
+          <tr>
+            <td class="mono text-sm text-muted">${item.id}</td>
+            <td class="fw600">${item.name}</td>
+            <td><span style="background:#F0F0F0;padding:2px 8px;border-radius:20px;font-size:11px;color:var(--text-2)">${item.cat}</span></td>
+            <td style="text-align:center;font-weight:600">${item.qty}</td>
+            <td style="text-align:center;color:var(--text-3)">${item.min}</td>
+            <td style="font-size:12px;color:var(--text-3)">${item.loc}</td>
+            <td>${statusBadge(item)}</td>
+            ${isAdmin ? `
+            <td>
+              <div class="flex gap8">
+                <button class="btn btn-icon" onclick="openEditItem('${item.id}')" title="แก้ไข">✏️</button>
+                <button class="btn btn-icon" onclick="openAdjItem('${item.id}','in')" title="นำเข้า">📥</button>
+                <button class="btn btn-icon" onclick="openAdjItem('${item.id}','out')" title="เบิก">📤</button>
+              </div>
+            </td>` : ''}
+          </tr>`).join('')}
+      </table>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// QR SCAN TAB
+// ============================================================
+function renderQRTab() {
+  const isAdmin = currentRole === 'admin';
+  document.getElementById('mainContent').innerHTML = `
+  <div class="qr-panel">
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px">📷 สแกน QR Code</div>
+    <div style="font-size:13px;color:var(--text-3);margin-bottom:1rem">สแกนเพื่อตรวจสอบ${isAdmin?'หรือเบิก/นำเข้า':''}สินค้า</div>
+
+    <div class="qr-box" onclick="simulateScan()" id="qrBox">
+      ${scanStep===1?'<div class="scan-line"></div>':''}
+      <span style="font-size:52px">📷</span>
+      <span>${scanStep===1?'กำลังสแกน...':'แตะเพื่อสแกน'}</span>
+    </div>
+
+    <div style="font-size:13px;color:var(--text-3);margin-bottom:6px">หรือเลือกสินค้าเพื่อทดสอบ:</div>
+    <select onchange="quickScanSelect(this.value)"
+      style="width:100%;padding:8px 12px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:13px;margin-bottom:1rem">
+      <option value="">— เลือกสินค้า —</option>
+      ${allItems.map(i => `<option value="${i.id}">${i.id} - ${i.name}</option>`).join('')}
+    </select>
+
+    ${scanStep===2 && scannedItem ? `
+    <div class="qr-result">
+      <div class="flex justify-between items-center" style="margin-bottom:10px">
+        <span style="font-size:15px;font-weight:700">${scannedItem.name}</span>
+        ${statusBadge(scannedItem)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><div class="result-label">รหัสสินค้า</div><div class="result-value mono">${scannedItem.id}</div></div>
+        <div><div class="result-label">คงเหลือ</div><div class="result-value" style="font-size:18px">${scannedItem.qty} ชิ้น</div></div>
+        <div><div class="result-label">หมวดหมู่</div><div class="result-value">${scannedItem.cat}</div></div>
+        <div><div class="result-label">สถานที่</div><div class="result-value">${scannedItem.loc}</div></div>
+      </div>
+    </div>
+
+    ${isAdmin ? `
+    <div class="op-tabs">
+      <div class="op-tab ${scanOp==='out'?'active':''}" onclick="setScanOp('out')">📤 เบิกออก</div>
+      <div class="op-tab ${scanOp==='in'?'active':''}" onclick="setScanOp('in')">📥 นำเข้า</div>
+    </div>
+    <div class="qty-row">
+      <span style="font-size:13px;color:var(--text-2)">จำนวน:</span>
+      <button class="qty-btn" onclick="chgScanQty(-1)">−</button>
+      <input class="qty-input" type="number" min="1" value="${scanQty}"
+        onchange="scanQty=Math.max(1,parseInt(this.value)||1);renderQRTab()"/>
+      <button class="qty-btn" onclick="chgScanQty(1)">+</button>
+    </div>
+    <div class="field"><label>หมายเหตุ (ถ้ามี)</label><input id="qrNote" placeholder="ระบุรายละเอียด..."/></div>
+    <button class="btn btn-primary" style="width:100%" onclick="doQROp()">
+      ${scanOp==='out'?'✅ ยืนยันการเบิก':'✅ ยืนยันการนำเข้า'}
+    </button>
+    ` : ''}
+
+    <button class="btn" style="width:100%;margin-top:8px;justify-content:center" onclick="resetScan()">🔄 สแกนใหม่</button>
+    ` : ''}
+  </div>`;
+}
+
+function simulateScan() {
+  if (scanStep !== 0) return;
+  scanStep = 1;
+  renderQRTab();
+  setTimeout(() => {
+    scannedItem = allItems[Math.floor(Math.random() * allItems.length)];
+    scanStep = 2; scanQty = 1;
+    renderQRTab();
+  }, 1400);
+}
+function quickScanSelect(id) {
+  if (!id) return;
+  scannedItem = allItems.find(i => i.id === id);
+  scanStep = 2; scanQty = 1;
+  renderQRTab();
+}
+function setScanOp(op) { scanOp = op; renderQRTab(); }
+function chgScanQty(d) { scanQty = Math.max(1, scanQty + d); renderQRTab(); }
+function resetScan() { scanStep = 0; scannedItem = null; scanQty = 1; renderQRTab(); }
+
+async function doQROp() {
+  if (!scannedItem) return;
+  const note = document.getElementById('qrNote')?.value || '';
+  if (scanOp === 'out' && scannedItem.qty < scanQty) {
+    showNotif('สต็อกไม่เพียงพอ!', 'error'); return;
+  }
+  await doTransaction({
+    type: scanOp,
+    itemId: scannedItem.id,
+    itemName: scannedItem.name,
+    qty: scanQty,
+    note,
+    source: 'qr_scan'
+  });
+  resetScan();
+}
+
+// ============================================================
+// WITHDRAW TAB (ใบเบิก)
+// ============================================================
+function renderWithdrawTab() {
+  if (!currentServiceNo) currentServiceNo = genServiceNo();
+  document.getElementById('mainContent').innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 420px;gap:1.5rem;align-items:start">
+
+    <div>
+      <div class="flex justify-between items-center section-gap">
+        <div style="font-size:15px;font-weight:600">📤 สร้างใบเบิกสินค้า</div>
+        <button class="btn" onclick="withdrawItems=[];currentServiceNo=genServiceNo();renderWithdrawTab()">🔄 ล้างรายการ</button>
+      </div>
+
+      <!-- Info -->
+      <div class="card" style="margin-bottom:1rem;padding:1.25rem">
+        <div class="service-ref">
+          <div>
+            <div class="service-ref-label">เลขที่ใบเบิก</div>
+            <div class="service-ref-no">${currentServiceNo}</div>
+          </div>
+          <div style="font-size:12px;color:var(--green-dark)">${todayStr()}</div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>ชื่อผู้เบิก</label><input id="wReqBy" value="${currentUser?.displayName||''}" placeholder="ชื่อ-นามสกุล"/></div>
+          <div class="field"><label>แผนก / ส่วนงาน</label><input id="wDept" placeholder="เช่น ฝ่าย IT, ห้องประชุม"/></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>ใช้งานที่ (สถานที่)</label><input id="wUsedAt" placeholder="เช่น PC-05, ห้อง A203"/></div>
+          <div class="field"><label>มีใบ Service / Job Order</label>
+            <select id="wHasService">
+              <option value="no">ไม่มี</option>
+              <option value="yes">มีใบ Service</option>
+              <option value="job">Job Order</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>เลขที่ใบ Service / รายละเอียดงาน</label>
+          <input id="wServiceRef" placeholder="เช่น SV-2025-001 หรืออธิบายงานที่ทำ"/></div>
+        <div class="field"><label>หมายเหตุเพิ่มเติม</label>
+          <textarea id="wNote" placeholder="รายละเอียดเพิ่มเติม..."></textarea></div>
+      </div>
+
+      <!-- Add item -->
+      <div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">เพิ่มรายการสินค้า</div>
+        <div class="flex gap8 items-center">
+          <select id="wItemSel" style="flex:1;padding:8px 12px;border:1px solid var(--border-md);border-radius:var(--radius);font-size:13px">
+            <option value="">— เลือกสินค้า —</option>
+            ${allItems.map(i=>`<option value="${i.id}">${i.id} - ${i.name} (เหลือ ${i.qty})</option>`).join('')}
+          </select>
+          <input id="wQtyIn" type="number" min="1" value="1"
+            style="width:70px;padding:8px;border:1px solid var(--border-md);border-radius:var(--radius);text-align:center;font-size:14px"/>
+          <button class="btn btn-primary" onclick="addWithdrawItem()">+ เพิ่ม</button>
+        </div>
+      </div>
+
+      <!-- Item list -->
+      ${withdrawItems.length > 0 ? `
+      <div class="card">
+        <div class="card-header"><span class="card-title">รายการที่จะเบิก (${withdrawItems.length} รายการ)</span></div>
+        <div class="table-wrap">
+          <table>
+            <tr><th style="width:90px">รหัส</th><th>ชื่อสินค้า</th><th style="width:80px;text-align:center">จำนวน</th><th style="width:60px"></th></tr>
+            ${withdrawItems.map((w, idx) => `
+              <tr>
+                <td class="mono text-sm text-muted">${w.id}</td>
+                <td>${w.name}</td>
+                <td style="text-align:center;font-weight:600">${w.qty}</td>
+                <td><button class="btn btn-danger btn-icon" onclick="removeWithdrawItem(${idx})">✕</button></td>
+              </tr>`).join('')}
+          </table>
+        </div>
+      </div>` : `
+      <div style="text-align:center;padding:2rem;color:var(--text-3);font-size:13px;border:1.5px dashed var(--border-md);border-radius:var(--radius-lg)">
+        ยังไม่มีรายการ — เลือกสินค้าด้านบนเพื่อเพิ่ม
+      </div>`}
+    </div>
+
+    <!-- RIGHT: Confirm -->
+    <div>
+      <div class="card" style="padding:1.25rem">
+        <div style="font-size:14px;font-weight:600;margin-bottom:1rem">สรุปใบเบิก</div>
+        <div class="qr-result">
+          <div class="result-row"><span class="result-label">เลขที่ใบเบิก</span><span class="result-value mono">${currentServiceNo}</span></div>
+          <div class="result-row"><span class="result-label">จำนวนรายการ</span><span class="result-value">${withdrawItems.length} รายการ</span></div>
+          <div class="result-row"><span class="result-label">จำนวนชิ้นรวม</span><span class="result-value">${withdrawItems.reduce((a,w)=>a+w.qty,0)} ชิ้น</span></div>
+          <div class="result-row"><span class="result-label">วันที่</span><span class="result-value">${todayStr()}</span></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:8px"
+          onclick="submitWithdraw()" ${withdrawItems.length===0?'disabled':''}>
+          ✅ ยืนยันการเบิก
+        </button>
+        <button class="btn" style="width:100%;justify-content:center"
+          onclick="printWithdraw()" ${withdrawItems.length===0?'disabled':''}>
+          🖨️ พิมพ์ใบเบิก
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function genServiceNo() {
+  const d = new Date();
+  return 'WD-' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') +
+    String(d.getDate()).padStart(2,'0') + '-' + String(Math.floor(Math.random()*9000)+1000);
+}
+
+function addWithdrawItem() {
+  const sel = document.getElementById('wItemSel');
+  const qty = parseInt(document.getElementById('wQtyIn').value) || 1;
+  const id = sel.value;
+  if (!id) { showNotif('กรุณาเลือกสินค้า', 'error'); return; }
+  const item = allItems.find(i => i.id === id);
+  if (!item) return;
+  const existing = withdrawItems.find(w => w.id === id);
+  const totalQty = (existing ? existing.qty : 0) + qty;
+  if (totalQty > item.qty) { showNotif(`สต็อกไม่พอ (มีแค่ ${item.qty} ชิ้น)`, 'error'); return; }
+  if (existing) existing.qty = totalQty;
+  else withdrawItems.push({ id: item.id, name: item.name, qty });
+  renderWithdrawTab();
+}
+
+function removeWithdrawItem(idx) {
+  withdrawItems.splice(idx, 1);
+  renderWithdrawTab();
+}
+
+async function submitWithdraw() {
+  if (withdrawItems.length === 0) return;
+  const reqBy = document.getElementById('wReqBy')?.value || currentUser?.displayName || '';
+  const dept = document.getElementById('wDept')?.value || '';
+  const usedAt = document.getElementById('wUsedAt')?.value || '';
+  const hasService = document.getElementById('wHasService')?.value || 'no';
+  const serviceRef = document.getElementById('wServiceRef')?.value || '';
+  const note = document.getElementById('wNote')?.value || '';
+
+  if (!usedAt) { showNotif('กรุณาระบุสถานที่ใช้งาน', 'error'); return; }
+
+  try {
+    const batch = db.batch();
+    const txns = [];
+
+    for (const w of withdrawItems) {
+      const item = allItems.find(i => i.id === w.id);
+      if (!item || item.qty < w.qty) {
+        showNotif(`${w.name}: สต็อกไม่พอ!`, 'error'); return;
+      }
+      // Update stock
+      const itemRef = db.collection('items').doc(w.id);
+      batch.update(itemRef, { qty: item.qty - w.qty });
+
+      // Transaction record
+      const txRef = db.collection('transactions').doc();
+      const txData = {
+        type: 'out',
+        serviceNo: currentServiceNo,
+        itemId: w.id,
+        itemName: w.name,
+        qty: w.qty,
+        usedAt,
+        dept,
+        reqBy,
+        hasService,
+        serviceRef,
+        note,
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        userName: currentUser.displayName,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      batch.set(txRef, txData);
+      txns.push(txData);
+    }
+
+    await batch.commit();
+
+    // Update local state
+    withdrawItems.forEach(w => {
+      const item = allItems.find(i => i.id === w.id);
+      if (item) item.qty -= w.qty;
+    });
+
+    showNotif(`เบิกสำเร็จ ${withdrawItems.length} รายการ — ${currentServiceNo}`);
+    const lastItems = [...withdrawItems];
+    const lastInfo = { reqBy, dept, usedAt, hasService, serviceRef, note, serviceNo: currentServiceNo };
+    withdrawItems = [];
+    const oldNo = currentServiceNo;
+    currentServiceNo = genServiceNo();
+    renderWithdrawTab();
+
+    // Auto-print prompt
+    if (confirm('เบิกสำเร็จ! ต้องการพิมพ์ใบเบิกหรือไม่?')) {
+      doPrint(lastItems, lastInfo);
+    }
+  } catch(e) {
+    showNotif(e.message, 'error');
+  }
+}
+
+function printWithdraw() {
+  const reqBy = document.getElementById('wReqBy')?.value || '';
+  const dept = document.getElementById('wDept')?.value || '';
+  const usedAt = document.getElementById('wUsedAt')?.value || '';
+  const hasService = document.getElementById('wHasService')?.value || 'no';
+  const serviceRef = document.getElementById('wServiceRef')?.value || '';
+  const note = document.getElementById('wNote')?.value || '';
+  doPrint(withdrawItems, { reqBy, dept, usedAt, hasService, serviceRef, note, serviceNo: currentServiceNo });
+}
+
+function doPrint(items, info) {
+  const serviceTypeMap = { no: 'ไม่มี', yes: 'ใบ Service', job: 'Job Order' };
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = `
+  <div class="print-doc">
+    <div class="print-header">
+      <div class="print-title">ใบเบิกสินค้า / Spare Part Requisition</div>
+      <div style="font-size:13px">RYG Stock System</div>
+    </div>
+    <div class="print-meta">
+      <div class="print-meta-item"><div class="print-meta-label">เลขที่ใบเบิก</div><div class="print-meta-value" style="font-size:16px">${info.serviceNo}</div></div>
+      <div class="print-meta-item"><div class="print-meta-label">วันที่เบิก</div><div class="print-meta-value">${todayStr()}</div></div>
+      <div class="print-meta-item"><div class="print-meta-label">ชื่อผู้เบิก</div><div class="print-meta-value">${info.reqBy}</div></div>
+      <div class="print-meta-item"><div class="print-meta-label">แผนก / ส่วนงาน</div><div class="print-meta-value">${info.dept||'-'}</div></div>
+      <div class="print-meta-item"><div class="print-meta-label">ใช้งานที่ (สถานที่)</div><div class="print-meta-value">${info.usedAt||'-'}</div></div>
+      <div class="print-meta-item"><div class="print-meta-label">ใบ Service / Job Order</div><div class="print-meta-value">${serviceTypeMap[info.hasService]||'-'} ${info.serviceRef?'('+info.serviceRef+')':''}</div></div>
+      <div class="print-meta-item"><div class="print-meta-label">ผู้อนุมัติ (Admin)</div><div class="print-meta-value">${currentUser?.displayName||''}</div></div>
+      <div class="print-meta-item"><div class="print-meta-label">Email</div><div class="print-meta-value">${currentUser?.email||''}</div></div>
+    </div>
+    ${info.note ? `<div style="background:#f5f5f5;border-radius:6px;padding:10px;margin-bottom:1rem;font-size:13px"><strong>หมายเหตุ:</strong> ${info.note}</div>` : ''}
+    <table class="print-table">
+      <tr><th>#</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>หมายเหตุ</th></tr>
+      ${items.map((w, i) => `<tr><td>${i+1}</td><td>${w.id}</td><td>${w.name}</td><td style="text-align:center;font-weight:700">${w.qty}</td><td></td></tr>`).join('')}
+      <tr><td colspan="3" style="text-align:right;font-weight:700">รวมทั้งหมด</td><td style="text-align:center;font-weight:700">${items.reduce((a,w)=>a+w.qty,0)}</td><td></td></tr>
+    </table>
+    <div class="print-sign">
+      <div class="sign-box"><div class="sign-line">ลงชื่อ ผู้เบิก<br>(${info.reqBy})</div></div>
+      <div class="sign-box"><div class="sign-line">ลงชื่อ ผู้อนุมัติ<br>(${currentUser?.displayName||''})</div></div>
+    </div>
+  </div>`;
+  printArea.style.display = 'block';
+  window.print();
+  setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+}
+
+// ============================================================
+// HISTORY TAB
+// ============================================================
+function renderHistoryTab() {
+  document.getElementById('mainContent').innerHTML = `
+  <div class="flex justify-between items-center section-gap">
+    <div style="font-size:15px;font-weight:600">ประวัติการเคลื่อนไหวทั้งหมด</div>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th style="width:90px">ประเภท</th>
+          <th style="width:110px">เลขที่ใบเบิก</th>
+          <th>สินค้า</th>
+          <th style="width:60px;text-align:center">จำนวน</th>
+          <th style="width:110px">ใช้งานที่</th>
+          <th style="width:90px">ใบ Service</th>
+          <th style="width:130px">ผู้ดำเนินการ</th>
+          <th style="width:140px">วันที่-เวลา</th>
+        </tr>
+        ${historyData.length === 0 ? `<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:2rem">ยังไม่มีรายการ</td></tr>` :
+          historyData.map(h => `
+          <tr>
+            <td>${h.type==='in'?'<span class="badge badge-in">📥 นำเข้า</span>':'<span class="badge badge-out2">📤 เบิก</span>'}</td>
+            <td class="mono text-sm text-muted">${h.serviceNo||'-'}</td>
+            <td>
+              <div class="fw600">${h.itemName}</div>
+              ${h.dept?`<div class="text-sm text-muted">${h.dept}</div>`:''}
+            </td>
+            <td style="text-align:center;font-weight:700">${h.qty}</td>
+            <td style="font-size:12px">${h.usedAt||'-'}</td>
+            <td style="font-size:12px">${h.hasService==='yes'?'✅ ใบ Service':h.hasService==='job'?'📋 Job Order':'—'} ${h.serviceRef?'<br><span class="mono text-muted">'+h.serviceRef+'</span>':''}</td>
+            <td>
+              <div style="font-size:12px;font-weight:500">${h.userName||'-'}</div>
+              <div class="text-sm text-muted">${h.userEmail||''}</div>
+            </td>
+            <td style="font-size:12px;color:var(--text-3)">${formatDT(h.createdAt)}</td>
+          </tr>`).join('')}
+      </table>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// ITEM CRUD (Admin only)
+// ============================================================
+function openAddItem() {
+  showModal(`
+    <div class="modal-title">+ เพิ่มสินค้าใหม่</div>
+    <div class="grid-2">
+      <div class="field"><label>รหัสสินค้า *</label><input id="mId" placeholder="SP050"/></div>
+      <div class="field"><label>หมวดหมู่ *</label><input id="mCat" placeholder="Storage, Network..."/></div>
+    </div>
+    <div class="field"><label>ชื่อสินค้า *</label><input id="mName" placeholder="ชื่อสินค้า"/></div>
+    <div class="grid-2">
+      <div class="field"><label>จำนวนเริ่มต้น</label><input id="mQty" type="number" value="0" min="0"/></div>
+      <div class="field"><label>จำนวนขั้นต่ำ (แจ้งเตือน)</label><input id="mMin" type="number" value="1" min="0"/></div>
+    </div>
+    <div class="field"><label>สถานที่จัดเก็บ</label><input id="mLoc" value="ชั้นเก็บของ IT"/></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doAddItem()">บันทึก</button>
+    </div>`);
+}
+
+async function doAddItem() {
+  const id = document.getElementById('mId').value.trim().toUpperCase();
+  const name = document.getElementById('mName').value.trim();
+  const cat = document.getElementById('mCat').value.trim();
+  if (!id || !name) { showNotif('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  if (allItems.find(i => i.id === id)) { showNotif('รหัสสินค้าซ้ำ!', 'error'); return; }
+  const data = { id, name, cat: cat||'Other', qty: parseInt(document.getElementById('mQty').value)||0,
+    min: parseInt(document.getElementById('mMin').value)||1, loc: document.getElementById('mLoc').value };
+  await db.collection('items').doc(id).set(data);
+  allItems.push({ docId: id, ...data });
+  allItems.sort((a,b) => a.id.localeCompare(b.id));
+  closeModal();
+  showNotif('เพิ่มสินค้าสำเร็จ');
+  renderStockTab();
+}
+
+function openEditItem(id) {
+  const item = allItems.find(i => i.id === id);
+  showModal(`
+    <div class="modal-title">✏️ แก้ไข — ${item.name}</div>
+    <div class="field"><label>ชื่อสินค้า</label><input id="eName" value="${item.name}"/></div>
+    <div class="grid-2">
+      <div class="field"><label>หมวดหมู่</label><input id="eCat" value="${item.cat}"/></div>
+      <div class="field"><label>สถานที่จัดเก็บ</label><input id="eLoc" value="${item.loc}"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>จำนวนคงเหลือ</label><input id="eQty" type="number" value="${item.qty}" min="0"/></div>
+      <div class="field"><label>จำนวนขั้นต่ำ</label><input id="eMin" type="number" value="${item.min}" min="0"/></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doEditItem('${id}')">บันทึก</button>
+    </div>`);
+}
+
+async function doEditItem(id) {
+  const item = allItems.find(i => i.id === id);
+  const data = {
+    name: document.getElementById('eName').value,
+    cat: document.getElementById('eCat').value,
+    loc: document.getElementById('eLoc').value,
+    qty: parseInt(document.getElementById('eQty').value)||0,
+    min: parseInt(document.getElementById('eMin').value)||1
+  };
+  await db.collection('items').doc(id).update(data);
+  Object.assign(item, data);
+  closeModal();
+  showNotif('บันทึกสำเร็จ');
+  renderStockTab();
+}
+
+function openAdjItem(id, op) {
+  const item = allItems.find(i => i.id === id);
+  showModal(`
+    <div class="modal-title">${op==='in'?'📥 นำเข้าสต็อก':'📤 เบิกออก'} — ${item.name}</div>
+    <div style="background:var(--bg);border-radius:var(--radius);padding:12px;margin-bottom:1rem;font-size:13px">
+      คงเหลือปัจจุบัน: <strong>${item.qty} ชิ้น</strong>
+    </div>
+    <div class="field"><label>จำนวน *</label><input id="adjQ" type="number" value="1" min="1"/></div>
+    <div class="field"><label>ใช้งานที่ / สถานที่</label><input id="adjUsedAt" placeholder="เช่น PC-05, ห้องประชุม"/></div>
+    <div class="field"><label>มีใบ Service</label>
+      <select id="adjSvc"><option value="no">ไม่มี</option><option value="yes">มีใบ Service</option><option value="job">Job Order</option></select>
+    </div>
+    <div class="field"><label>เลขที่ใบ Service / รายละเอียด</label><input id="adjSvcRef" placeholder="เลขที่อ้างอิง"/></div>
+    <div class="field"><label>หมายเหตุ</label><textarea id="adjNote" placeholder="ระบุรายละเอียด..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doAdjItem('${id}','${op}')">ยืนยัน</button>
+    </div>`);
+}
+
+async function doAdjItem(id, op) {
+  const item = allItems.find(i => i.id === id);
+  const qty = parseInt(document.getElementById('adjQ').value) || 1;
+  const usedAt = document.getElementById('adjUsedAt').value;
+  const hasService = document.getElementById('adjSvc').value;
+  const serviceRef = document.getElementById('adjSvcRef').value;
+  const note = document.getElementById('adjNote').value;
+  if (op === 'out' && item.qty < qty) { showNotif('สต็อกไม่เพียงพอ!', 'error'); return; }
+  await doTransaction({ type: op, itemId: id, itemName: item.name, qty, usedAt, hasService, serviceRef, note, source: 'manual' });
+  closeModal();
+}
+
+// ============================================================
+// TRANSACTION HELPER
+// ============================================================
+async function doTransaction(data) {
+  const item = allItems.find(i => i.id === data.itemId);
+  if (!item) return;
+  const newQty = data.type === 'in' ? item.qty + data.qty : item.qty - data.qty;
+  const batch = db.batch();
+  batch.update(db.collection('items').doc(data.itemId), { qty: newQty });
+  batch.set(db.collection('transactions').doc(), {
+    ...data,
+    serviceNo: data.serviceNo || genServiceNo(),
+    userId: currentUser.uid,
+    userEmail: currentUser.email,
+    userName: currentUser.displayName,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  await batch.commit();
+  item.qty = newQty;
+  showNotif(data.type === 'in' ? `นำเข้า ${data.qty} ชิ้นสำเร็จ` : `เบิก ${data.qty} ชิ้นสำเร็จ`);
+  if (currentTab === 'stock') renderStockTab();
+  if (currentTab === 'dashboard') renderDashboardTab();
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function showModal(html) {
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.id = 'modalOverlay';
+  div.innerHTML = `<div class="modal modal-lg">${html}</div>`;
+  div.addEventListener('click', e => { if (e.target === div) closeModal(); });
+  document.body.appendChild(div);
+}
+function closeModal() {
+  const m = document.getElementById('modalOverlay');
+  if (m) m.remove();
+}
+
+// ============================================================
+// NOTIF
+// ============================================================
+function showNotif(msg, type = 'ok') {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.className = 'notif show' + (type === 'error' ? ' error' : '');
+  setTimeout(() => n.className = 'notif', 2800);
+}
+</script>
+</body>
+</html>
