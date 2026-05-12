@@ -11,6 +11,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="shared.js"></script>
+<!-- SheetJS for Excel Import/Export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* Add mode toggle */
 .add-mode-tabs{display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden;}
@@ -22,6 +24,34 @@
 .qty-stepper button:hover{background:#e0e0e0;}
 .qty-stepper input{width:60px;height:38px;text-align:center;border:none;border-left:1px solid var(--bdrm);border-right:1px solid var(--bdrm);font-size:16px;font-weight:700;font-family:var(--mono);}
 .qty-stepper input:focus{outline:none;}
+
+/* Import/Export bar */
+.ie-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;}
+.ie-bar .btn{font-size:12px;}
+.ie-drop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;}
+.ie-drop.show{display:flex;}
+.ie-box{background:#fff;border-radius:16px;padding:1.5rem;width:min(480px,90vw);max-height:80vh;overflow-y:auto;}
+.ie-title{font-size:15px;font-weight:700;margin-bottom:1rem;}
+.ie-section{margin-bottom:1rem;padding:1rem;background:#F8F9FA;border-radius:10px;border:1px solid var(--bdr);}
+.ie-section-title{font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:.6rem;}
+.drop-zone{border:2px dashed var(--bdrm);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:.2s;}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--g);background:var(--gll);}
+.drop-zone .dz-icon{font-size:28px;margin-bottom:6px;}
+.drop-zone .dz-text{font-size:12px;color:var(--tx2);}
+.import-preview{margin-top:10px;border:1px solid var(--bdr);border-radius:8px;overflow:hidden;}
+.import-preview table{width:100%;border-collapse:collapse;font-size:11px;}
+.import-preview th{background:var(--g);color:#fff;padding:6px 8px;text-align:left;font-weight:600;}
+.import-preview td{padding:5px 8px;border-bottom:1px solid var(--bdr);}
+.import-preview tr:last-child td{border-bottom:none;}
+.import-preview tr:nth-child(even) td{background:#FAFAFA;}
+.ie-row-ok{color:var(--g);}
+.ie-row-warn{color:var(--am);}
+.ie-row-err{color:var(--r);}
+.import-summary{font-size:12px;font-weight:600;margin:.6rem 0;padding:.5rem .75rem;border-radius:6px;background:var(--gll);border:1px solid var(--gl);color:var(--gd);}
+.import-summary.warn{background:#FFF8E1;border-color:#FFD54F;color:#B8860B;}
+.import-summary.err{background:var(--rl);border-color:#F0A0A0;color:var(--r);}
+.progress-bar{height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin:.5rem 0;}
+.progress-fill{height:100%;background:var(--g);border-radius:3px;transition:width .3s;}
 </style>
 </head>
 <body>
@@ -46,11 +76,21 @@
   <div class="content" id="mainContent"></div>
   <nav class="bottom-nav" id="bottomNav"></nav>
 </div>
+
+<!-- Import/Export Overlay -->
+<div class="ie-drop" id="ieOverlay" onclick="closeIEOverlay(event)">
+  <div class="ie-box" id="ieBox">
+    <div class="ie-title" id="ieTitle">📊 Import / Export Excel</div>
+    <div id="ieBody"></div>
+  </div>
+</div>
+
 <div id="notif"></div>
 
 <script>
 let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
 let searchQ='', expandedItem=null, openCats={}, pendingUnits=[];
+let importRows=[], importMode='stock'; // 'stock' | 'units'
 
 initShell('stock', async (user, role, firestore) => {
   currentUser=user; currentRole=role; db=firestore;
@@ -80,7 +120,8 @@ function statusBadge(id){
   if(s==='low')return'<span class="badge badge-low">ใกล้หมด</span>';
   return'<span class="badge badge-ok">ปกติ</span>';
 }
-function snBadge(u){ return u.sn?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
+// BUG FIX: เพิ่มเช็ค sn !== '-' ด้วย
+function snBadge(u){ return (u.sn && u.sn!=='-')?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
 function unitStatBadge(s){
   if(s==='used')return'<span class="badge badge-used2">เบิกแล้ว</span>';
   if(s==='damaged')return'<span class="badge badge-dmg">ชำรุด</span>';
@@ -105,6 +146,17 @@ function renderStock(){
     </div>
   </div>`;
 
+  // Import/Export bar — Admin only
+  if(isAdmin){
+    html+=`
+  <div class="ie-bar">
+    <button class="btn btn-sm" onclick="openExportStock()" title="Export สต็อกทั้งหมดเป็น Excel">📥 Export Excel</button>
+    <button class="btn btn-sm" onclick="openImportStock()" title="Import สต็อกจาก Excel">📤 Import Excel</button>
+    <button class="btn btn-sm" onclick="openExportUnits()" title="Export รายการชิ้นส่วนทั้งหมด">📋 Export ชิ้นส่วน</button>
+    <button class="btn btn-sm" onclick="downloadTemplate()" title="Download ไฟล์ Template">📑 Template</button>
+  </div>`;
+  }
+
   CAT_GROUPS.forEach(grp=>{
     const items=grouped[grp.key]; if(!items||!items.length)return;
     const isOpen=openCats[grp.key]!==false;
@@ -118,8 +170,8 @@ function renderStock(){
         <span class="cat-name">${grp.label}</span>
         <div class="cat-counts">
           <span class="cat-count">${items.length} รายการ · ${totalQty} ชิ้น</span>
-          ${outCnt?`<span class="badge badge-out">${outCnt} หมด</span>`:''}
-          ${lowCnt?`<span class="badge badge-low">${lowCnt} ใกล้หมด</span>`:''}
+          ${outCnt?`<span class="badge badge-out">${outCnt} หมด`+'</span>':''}
+          ${lowCnt?`<span class="badge badge-low">${lowCnt} ใกล้หมด`+'</span>':''}
         </div>
         <span class="cat-arrow">▼</span>
       </div>
@@ -187,7 +239,6 @@ function toggleCat(key){ openCats[key]=(openCats[key]===false)?true:false; rende
 function toggleExpand(id){ expandedItem=expandedItem===id?null:id; renderStock(); }
 
 // ─── ADD UNITS MODAL ───
-// Mode: 'qty' (จำนวนเท่านั้น) or 'sn' (ระบุ S/N)
 let addMode='qty';
 
 function openAddUnits(itemId){
@@ -271,8 +322,8 @@ async function doSaveQty(itemId){
     createdAt:firebase.firestore.FieldValue.serverTimestamp(), source:'manual_qty'
   });
   await batch.commit();
-  const snap=await db.collection('units').where('itemId','==',itemId).get();
-  allUnits=allUnits.filter(u=>u.itemId!==itemId).concat(snap.docs.map(d=>({docId:d.id,...d.data()})));
+  // BUG FIX: Reload units จาก Firestore แทนการ merge ที่อาจ stale
+  await loadUnits();
   closeModal(); showNotif(`เพิ่ม ${qty} ชิ้นสำเร็จ`); renderStock();
 }
 
@@ -316,8 +367,8 @@ async function doSaveUnits(itemId){
     createdAt:firebase.firestore.FieldValue.serverTimestamp(),source:'manual_sn'
   });
   await batch.commit();
-  const snap=await db.collection('units').where('itemId','==',itemId).get();
-  allUnits=allUnits.filter(u=>u.itemId!==itemId).concat(snap.docs.map(d=>({docId:d.id,...d.data()})));
+  // BUG FIX: Reload units ทั้งหมดใหม่
+  await loadUnits();
   closeModal(); showNotif(`เพิ่ม ${pendingUnits.length} ชิ้นสำเร็จ`); renderStock();
 }
 
@@ -409,6 +460,422 @@ async function doEditItem(id){
     loc:document.getElementById('eLoc').value,min:parseInt(document.getElementById('eMin').value)||1};
   await db.collection('items').doc(id).update(data);
   Object.assign(item,data); closeModal(); showNotif('บันทึกสำเร็จ'); renderStock();
+}
+
+// ══════════════════════════════════════════════
+// ─── IMPORT / EXPORT EXCEL ───
+// ══════════════════════════════════════════════
+
+function closeIEOverlay(e){
+  if(e.target===document.getElementById('ieOverlay')) closeIE();
+}
+function closeIE(){
+  document.getElementById('ieOverlay').classList.remove('show');
+  importRows=[];
+}
+
+// ── EXPORT: สต็อกรวม (อิงจาก Excel ที่ส่งมา) ──
+function openExportStock(){
+  document.getElementById('ieTitle').textContent='📥 Export สต็อก Spare Part';
+  document.getElementById('ieBody').innerHTML=`
+    <p class="fz12 txmute" style="margin-bottom:1rem">Export รายการสต็อกทั้งหมดในรูปแบบเดียวกับไฟล์ต้นฉบับ รองรับ 2 ชีต: <b>Spare Part</b> และ <b>ชิ้นส่วน (Units)</b></p>
+    <div class="flex gap8" style="flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="doExportStock()">📥 Export ตอนนี้</button>
+      <button class="btn" onclick="closeIE()">ยกเลิก</button>
+    </div>`;
+  document.getElementById('ieOverlay').classList.add('show');
+}
+
+function doExportStock(){
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: Spare Part (สรุปสต็อก) ──
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  const stockRows = [
+    [`รายการทรัพย์สิน Spare Part`, '', '', '', `อัพเดต ${dateStr}`, ''],
+    ['ลำดับ', 'รายละเอียด', 'จำนวน (นำเข้า)', 'คงเหลือ', 'สถานที่จัดเก็บ', 'หมวดหมู่']
+  ];
+  allItems.forEach((item, idx) => {
+    const avail = getItemQty(item.id);
+    const total = getUnitsOf(item.id).length;
+    stockRows.push([idx+1, item.name, total, avail, item.loc||'ชั้น IT', item.cat||'']);
+  });
+  // Summary row
+  const totalAvail = allUnits.filter(u=>u.status==='available').length;
+  stockRows.push(['', 'รวมทั้งหมด', allUnits.length, totalAvail, '', '']);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(stockRows);
+  ws1['!cols'] = [{wch:8},{wch:35},{wch:16},{wch:10},{wch:20},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Spare Part');
+
+  // ── Sheet 2: Units (ชิ้นส่วนแต่ละชิ้น) ──
+  const unitRows = [
+    ['รหัสสินค้า', 'ชื่อสินค้า', 'หมวดหมู่', 'S/N', 'รายละเอียด', 'สถานะ', 'ใช้งานที่', 'หมายเหตุ']
+  ];
+  allItems.forEach(item => {
+    const units = getUnitsOf(item.id);
+    units.forEach(u => {
+      const statusTH = u.status==='available'?'พร้อมใช้':u.status==='used'?'เบิกแล้ว':'ชำรุด';
+      unitRows.push([item.id, item.name, item.cat||'', u.sn||'-', u.detail||'', statusTH, u.usedAtLabel||'', u.note||'']);
+    });
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(unitRows);
+  ws2['!cols'] = [{wch:10},{wch:30},{wch:12},{wch:20},{wch:25},{wch:12},{wch:15},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'ชิ้นส่วน (Units)');
+
+  // ── Sheet 3: เบิกออก (ประวัติ) ──
+  // (ดึงจาก transactions ที่โหลดไว้แล้ว — ถ้าต้องการให้ครบ ควรดึงเพิ่ม แต่ตอนนี้ทำ stub)
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['หมายเหตุ'],['ดูประวัติการเบิกได้ที่หน้า ประวัติ']]), 'เบิกออก');
+
+  XLSX.writeFile(wb, `RYG_Stock_${dateStr}.xlsx`);
+  showNotif('Export สำเร็จ!'); closeIE();
+}
+
+// ── EXPORT: ชิ้นส่วน (Units) ──
+function openExportUnits(){
+  document.getElementById('ieTitle').textContent='📋 Export รายการชิ้นส่วน';
+  document.getElementById('ieBody').innerHTML=`
+    <p class="fz12 txmute" style="margin-bottom:1rem">Export รายละเอียดชิ้นส่วนทุกชิ้น พร้อม S/N, สถานะ, สถานที่ใช้งาน</p>
+    <div class="flex gap8">
+      <button class="btn btn-primary" onclick="doExportUnits()">📋 Export ตอนนี้</button>
+      <button class="btn" onclick="closeIE()">ยกเลิก</button>
+    </div>`;
+  document.getElementById('ieOverlay').classList.add('show');
+}
+
+function doExportUnits(){
+  const wb = XLSX.utils.book_new();
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  const rows = [['รหัสสินค้า','ชื่อสินค้า','หมวดหมู่','S/N','รายละเอียด','สถานะ','ใช้งานที่','วันที่เพิ่ม','เพิ่มโดย','หมายเหตุ']];
+  allItems.forEach(item => {
+    getUnitsOf(item.id).forEach(u => {
+      const statusTH = u.status==='available'?'พร้อมใช้':u.status==='used'?'เบิกแล้ว':'ชำรุด';
+      const addedAt = u.addedAt?.toDate ? u.addedAt.toDate().toLocaleDateString('th-TH') : '';
+      rows.push([item.id, item.name, item.cat||'', u.sn||'-', u.detail||'', statusTH, u.usedAtLabel||'', addedAt, u.addedBy||'', u.note||'']);
+    });
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:10},{wch:30},{wch:12},{wch:20},{wch:25},{wch:12},{wch:15},{wch:14},{wch:15},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Units');
+  XLSX.writeFile(wb, `RYG_Units_${dateStr}.xlsx`);
+  showNotif('Export ชิ้นส่วนสำเร็จ!'); closeIE();
+}
+
+// ── DOWNLOAD TEMPLATE ──
+function downloadTemplate(){
+  const wb = XLSX.utils.book_new();
+
+  // Sheet: นำเข้าสต็อก (Item Types)
+  const itemSheet = XLSX.utils.aoa_to_sheet([
+    ['=== Template: นำเข้าประเภทสินค้า (Items) ===','','','','',''],
+    ['คำอธิบาย: กรอกข้อมูลตั้งแต่แถวที่ 4 ลงไป ห้ามแก้ไขแถว Header','','','','',''],
+    ['รหัสสินค้า *','ชื่อสินค้า *','หมวดหมู่','จำนวนขั้นต่ำ','สถานที่จัดเก็บ','หมายเหตุ'],
+    ['SP050','ตัวอย่าง: RAM DDR5 16GB','Memory',2,'ชั้น IT',''],
+    ['SP051','ตัวอย่าง: SSD NVMe 512GB','Storage',1,'ชั้น IT',''],
+  ]);
+  itemSheet['!cols']=[{wch:14},{wch:35},{wch:14},{wch:14},{wch:18},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, itemSheet, 'Template_Items');
+
+  // Sheet: นำเข้าชิ้นส่วน (Units)
+  const unitSheet = XLSX.utils.aoa_to_sheet([
+    ['=== Template: นำเข้าชิ้นส่วน (Units) ===','','','',''],
+    ['คำอธิบาย: ระบุ รหัสสินค้า ให้ตรงกับที่มีในระบบ','','','',''],
+    ['รหัสสินค้า *','S/N (หรือ - ถ้าไม่มี)','รายละเอียด','หมายเหตุ','จำนวน (กรณีไม่มี S/N)'],
+    ['SP001','SN-12345','SSD 128GB SATA Toshiba','','1'],
+    ['SP007','-','RAM PC3 8GB Kingston','สภาพดี','1'],
+    ['SP004','-','HDD 500GB Seagate','','3'],
+  ]);
+  unitSheet['!cols']=[{wch:14},{wch:20},{wch:28},{wch:18},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, unitSheet, 'Template_Units');
+
+  // Sheet: หมวดหมู่
+  const catSheet = XLSX.utils.aoa_to_sheet([
+    ['หมวดหมู่ที่รองรับ','คำอธิบาย'],
+    ['Storage','HDD, SSD'],
+    ['Memory','RAM'],
+    ['Component','CPU, GPU, PSU, PCI Card'],
+    ['Network','Switch, Network Adapter'],
+    ['Cable','สายไฟ, สายสัญญาณ'],
+    ['Power','Adapter, PSU'],
+    ['Device','Monitor, Computer, Keyboard, Mouse, Webcam, Printer'],
+    ['Camera','IP Camera, กล้องวงจรปิด'],
+    ['Other','อื่นๆ'],
+  ]);
+  catSheet['!cols']=[{wch:14},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, catSheet, 'หมวดหมู่');
+
+  XLSX.writeFile(wb, 'RYG_Stock_Template.xlsx');
+  showNotif('ดาวน์โหลด Template สำเร็จ!');
+}
+
+// ── IMPORT: นำเข้าสต็อก ──
+function openImportStock(){
+  importRows=[];
+  document.getElementById('ieTitle').textContent='📤 Import Excel';
+  document.getElementById('ieBody').innerHTML=`
+    <div class="ie-section">
+      <div class="ie-section-title">เลือกประเภทการ Import</div>
+      <div style="display:flex;gap:8px;margin-bottom:.5rem">
+        <button class="btn btn-sm ${importMode==='stock'?'btn-primary':''}" onclick="setImportMode('stock')">📦 ประเภทสินค้า (Items)</button>
+        <button class="btn btn-sm ${importMode==='units'?'btn-primary':''}" onclick="setImportMode('units')">🔢 ชิ้นส่วน (Units)</button>
+      </div>
+      <div class="fz11 txmute" id="importModeDesc">${importMode==='stock'?'Import รายการประเภทสินค้าใหม่ (Items) — จะไม่ทับรายการที่มีรหัสซ้ำ':'Import ชิ้นส่วนแต่ละชิ้น (Units) โดยอ้างอิง รหัสสินค้า ที่มีในระบบ'}</div>
+    </div>
+    <div class="ie-section">
+      <div class="ie-section-title">อัปโหลดไฟล์ Excel</div>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" 
+        ondragover="event.preventDefault();this.classList.add('drag')" 
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDrop(event)">
+        <div class="dz-icon">📊</div>
+        <div class="dz-text">คลิกหรือลากไฟล์ .xlsx มาวาง</div>
+        <div class="fz11 txmute" style="margin-top:4px">รองรับ .xlsx, .xls</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(this)"/>
+    </div>
+    <div id="importPreviewArea"></div>
+    <div class="flex gap8" id="importActions" style="display:none!important">
+      <button class="btn btn-primary" id="importConfirmBtn" onclick="doImport()">✅ นำเข้าข้อมูล</button>
+      <button class="btn" onclick="closeIE()">ยกเลิก</button>
+    </div>`;
+  document.getElementById('ieOverlay').classList.add('show');
+}
+
+function setImportMode(mode){
+  importMode=mode; importRows=[];
+  const desc=document.getElementById('importModeDesc');
+  if(desc) desc.textContent=mode==='stock'?'Import รายการประเภทสินค้าใหม่ (Items) — จะไม่ทับรายการที่มีรหัสซ้ำ':'Import ชิ้นส่วนแต่ละชิ้น (Units) โดยอ้างอิง รหัสสินค้า ที่มีในระบบ';
+  document.querySelectorAll('#ieBody .btn-sm').forEach(b=>{
+    b.classList.remove('btn-primary');
+    if(b.textContent.includes(mode==='stock'?'Items':'Units')) b.classList.add('btn-primary');
+  });
+  document.getElementById('importPreviewArea').innerHTML='';
+  document.getElementById('importActions').style.display='none';
+}
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag');
+  const file=e.dataTransfer.files[0]; if(file) parseExcelFile(file);
+}
+function handleFileSelect(input){ const file=input.files[0]; if(file) parseExcelFile(file); }
+
+function parseExcelFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      // หา sheet ที่เหมาะสม: ลอง Template_Items/Template_Units ก่อน แล้วค่อย sheet แรก
+      let sheetName;
+      if(importMode==='stock'){
+        sheetName=wb.SheetNames.find(n=>n.toLowerCase().includes('template_item')||n.toLowerCase().includes('spare part')||n==='Sapre Part')
+          ||wb.SheetNames[0];
+      } else {
+        sheetName=wb.SheetNames.find(n=>n.toLowerCase().includes('template_unit')||n.toLowerCase().includes('unit'))
+          ||wb.SheetNames[0];
+      }
+      const ws=wb.Sheets[sheetName];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(importMode==='stock') parseStockRows(raw);
+      else parseUnitRows(raw);
+    }catch(err){
+      document.getElementById('importPreviewArea').innerHTML=`<div class="fz12" style="color:var(--r)">อ่านไฟล์ไม่สำเร็จ: ${err.message}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseStockRows(raw){
+  // หา header row: แถวที่มี "รหัสสินค้า" หรือ "ลำดับ"
+  let headerIdx=-1;
+  for(let i=0;i<Math.min(raw.length,10);i++){
+    const row=raw[i].map(c=>String(c||'').trim());
+    if(row.some(c=>c.includes('รหัส')||c.includes('SP')||c.includes('ชื่อ'))) { headerIdx=i; break; }
+  }
+  // ถ้าไม่เจอ header ให้ถือว่าแถวแรกเป็น header หรือข้ามแถว comment
+  const dataStart=headerIdx>=0?headerIdx+1:2;
+  const parsed=[];
+  for(let i=dataStart;i<raw.length;i++){
+    const row=raw[i];
+    const idRaw=String(row[0]||'').trim();
+    const nameRaw=String(row[1]||'').trim();
+    if(!idRaw||!nameRaw||idRaw.startsWith('=')) continue;
+    // ตรวจสอบ format รหัส
+    const id=idRaw.toUpperCase();
+    const exists=!!allItems.find(item=>item.id===id);
+    const cat=String(row[2]||'Other').trim();
+    const min=parseInt(row[3])||1;
+    const loc=String(row[4]||'ชั้น IT').trim();
+    const note=String(row[5]||'').trim();
+    let status='ok', msg='';
+    if(!id.match(/^[A-Z0-9]{2,10}$/)){status='warn';msg='รหัสควรเป็นตัวอักษรหรือตัวเลข 2-10 ตัว';}
+    if(exists){status='skip';msg='รหัสซ้ำ — จะข้ามรายการนี้';}
+    parsed.push({id,name:nameRaw,cat,min,loc,note,exists,status,msg,orig:row});
+  }
+  importRows=parsed;
+  renderImportPreviewStock();
+}
+
+function parseUnitRows(raw){
+  // หา header
+  let dataStart=1;
+  for(let i=0;i<Math.min(raw.length,10);i++){
+    const row=raw[i].map(c=>String(c||'').trim());
+    if(row.some(c=>c.includes('รหัส')||c==='S/N'||c.includes('ชิ้นส่วน'))){ dataStart=i+1; break; }
+  }
+  const parsed=[];
+  for(let i=dataStart;i<raw.length;i++){
+    const row=raw[i];
+    const itemId=String(row[0]||'').trim().toUpperCase();
+    if(!itemId||itemId.startsWith('=')) continue;
+    const sn=String(row[1]||'-').trim()||'-';
+    const detail=String(row[2]||'').trim();
+    const note=String(row[3]||'').trim();
+    const qty=Math.max(1,parseInt(row[4])||1);
+    const item=allItems.find(it=>it.id===itemId);
+    let status='ok', msg='';
+    if(!item){status='err';msg='ไม่พบรหัสสินค้าในระบบ';}
+    else if(sn!=='-'&&allUnits.find(u=>u.itemId===itemId&&u.sn===sn&&u.sn!=='-')){status='warn';msg='S/N ซ้ำในระบบ';}
+    parsed.push({itemId,itemName:item?.name||'?',sn,detail,note,qty:sn!=='-'?1:qty,status,msg,item});
+  }
+  importRows=parsed;
+  renderImportPreviewUnits();
+}
+
+function renderImportPreviewStock(){
+  const ok=importRows.filter(r=>r.status==='ok').length;
+  const skip=importRows.filter(r=>r.status==='skip').length;
+  const warn=importRows.filter(r=>r.status==='warn').length;
+  const summClass=skip>0||warn>0?'warn':'';
+  const area=document.getElementById('importPreviewArea');
+  area.innerHTML=`
+    <div class="import-summary ${summClass}">
+      พบ ${importRows.length} แถว · จะนำเข้า ${ok+warn} รายการ · ข้าม ${skip} รายการ (รหัสซ้ำ)
+    </div>
+    <div class="import-preview" style="max-height:220px;overflow-y:auto">
+      <table>
+        <tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th><th>หมวด</th><th>Min</th><th>สถานะ</th></tr>
+        ${importRows.map((r,i)=>`<tr>
+          <td>${i+1}</td>
+          <td class="ie-row-${r.status==='skip'?'warn':r.status}">${r.id}</td>
+          <td>${r.name}</td><td>${r.cat}</td><td>${r.min}</td>
+          <td class="ie-row-${r.status==='skip'?'warn':r.status}">${r.msg||'✓ OK'}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+  const actEl=document.getElementById('importActions');
+  actEl.style.cssText='display:flex;gap:8px;margin-top:1rem';
+  const btn=document.getElementById('importConfirmBtn');
+  btn.disabled=(ok+warn)===0;
+  btn.textContent=`✅ นำเข้า ${ok+warn} รายการ`;
+}
+
+function renderImportPreviewUnits(){
+  const ok=importRows.filter(r=>r.status!=='err').length;
+  const err=importRows.filter(r=>r.status==='err').length;
+  const area=document.getElementById('importPreviewArea');
+  area.innerHTML=`
+    <div class="import-summary ${err>0?'warn':''}">
+      พบ ${importRows.length} แถว · จะนำเข้า ${ok} รายการ · ข้าม ${err} รายการ (ไม่พบ Item)
+    </div>
+    <div class="import-preview" style="max-height:220px;overflow-y:auto">
+      <table>
+        <tr><th>#</th><th>รหัส</th><th>ชื่อ</th><th>S/N</th><th>รายละเอียด</th><th>จำนวน</th><th>สถานะ</th></tr>
+        ${importRows.map((r,i)=>`<tr>
+          <td>${i+1}</td>
+          <td class="ie-row-${r.status==='err'?'err':'ok'}">${r.itemId}</td>
+          <td>${r.itemName}</td>
+          <td style="font-family:var(--mono);font-size:11px">${r.sn}</td>
+          <td>${r.detail}</td><td>${r.qty}</td>
+          <td class="ie-row-${r.status==='err'?'err':r.status==='warn'?'warn':'ok'}">${r.msg||'✓ OK'}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+  const actEl=document.getElementById('importActions');
+  actEl.style.cssText='display:flex;gap:8px;margin-top:1rem';
+  const btn=document.getElementById('importConfirmBtn');
+  btn.disabled=ok===0;
+  btn.textContent=`✅ นำเข้า ${ok} ชิ้น`;
+}
+
+async function doImport(){
+  if(!importRows.length) return;
+  const btn=document.getElementById('importConfirmBtn');
+  btn.disabled=true; btn.textContent='กำลังนำเข้า...';
+
+  const progressHTML=`<div class="progress-bar"><div class="progress-fill" id="importProg" style="width:0%"></div></div>
+    <div class="fz12 txmute" id="importProgText">กำลังนำเข้า...</div>`;
+  document.getElementById('importPreviewArea').insertAdjacentHTML('afterbegin',progressHTML);
+
+  try{
+    if(importMode==='stock') await doImportItems();
+    else await doImportUnits();
+  }catch(e){
+    showNotif('นำเข้าไม่สำเร็จ: '+e.message,'error');
+    btn.disabled=false; btn.textContent='ลองใหม่';
+  }
+}
+
+async function doImportItems(){
+  const toAdd=importRows.filter(r=>r.status!=='skip');
+  let done=0;
+  // batch เป็นกลุ่มๆ ละ 400 (Firestore limit 500)
+  const CHUNK=400;
+  for(let s=0;s<toAdd.length;s+=CHUNK){
+    const batch=db.batch();
+    toAdd.slice(s,s+CHUNK).forEach(r=>{
+      batch.set(db.collection('items').doc(r.id),{id:r.id,name:r.name,cat:r.cat,min:r.min,loc:r.loc});
+    });
+    await batch.commit();
+    done+=Math.min(CHUNK,toAdd.length-s);
+    const pct=Math.round(done/toAdd.length*100);
+    const pg=document.getElementById('importProg'); if(pg)pg.style.width=pct+'%';
+    const pt=document.getElementById('importProgText'); if(pt)pt.textContent=`นำเข้า ${done}/${toAdd.length}...`;
+  }
+  await loadItems(); await loadUnits();
+  showNotif(`นำเข้าสำเร็จ ${toAdd.length} รายการ`);
+  renderStock(); closeIE();
+}
+
+async function doImportUnits(){
+  const toAdd=importRows.filter(r=>r.status!=='err');
+  let done=0, totalUnits=0;
+  const CHUNK=400;
+  for(let s=0;s<toAdd.length;s+=CHUNK){
+    const batch=db.batch();
+    toAdd.slice(s,s+CHUNK).forEach(r=>{
+      const count=(r.sn!=='-')?1:r.qty;
+      for(let k=0;k<count;k++){
+        totalUnits++;
+        batch.set(db.collection('units').doc(),{
+          itemId:r.itemId, sn:r.sn, detail:r.detail, note:r.note,
+          status:'available',
+          addedAt:firebase.firestore.FieldValue.serverTimestamp(),
+          addedBy:currentUser.displayName, addedByUid:currentUser.uid
+        });
+      }
+      // transaction log
+      batch.set(db.collection('transactions').doc(),{
+        type:'in', itemId:r.itemId, itemName:r.itemName,
+        qty:count, sn:r.sn,
+        userId:currentUser.uid, userEmail:currentUser.email, userName:currentUser.displayName,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp(), source:'excel_import'
+      });
+    });
+    await batch.commit();
+    done+=Math.min(CHUNK,toAdd.length-s);
+    const pct=Math.round(done/toAdd.length*100);
+    const pg=document.getElementById('importProg'); if(pg)pg.style.width=pct+'%';
+    const pt=document.getElementById('importProgText'); if(pt)pt.textContent=`นำเข้า ${done}/${toAdd.length} รายการ...`;
+  }
+  await loadUnits();
+  showNotif(`นำเข้าสำเร็จ ${toAdd.length} รายการ (${totalUnits} ชิ้น)`);
+  renderStock(); closeIE();
 }
 </script>
 </body>

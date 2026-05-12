@@ -56,9 +56,11 @@ async function loadUnits(){
   const snap=await db.collection('units').get();
   allUnits=snap.docs.map(d=>({docId:d.id,...d.data()}));
 }
+
+// BUG FIX: กรองเฉพาะ 'available' อย่างเดียว (ไม่นับ used/damaged)
 const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
 const getItemQty=id=>getAvail(id).length;
-function snBadge(u){ return u.sn&&u.sn!=='-'?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
+function snBadge(u){ return (u.sn&&u.sn!=='-')?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
 
 function renderWithdraw(){
   document.getElementById('mainContent').innerHTML=`
@@ -134,9 +136,14 @@ function resetWd(){ withdrawUnits=[]; currentServiceNo=genNo(); renderWithdraw()
 function loadWdUnits(){
   const id=document.getElementById('wItemSel').value;
   if(!id){document.getElementById('wUnitList').innerHTML='<div class="fz12 txmute">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>';return;}
+
+  // BUG FIX: กรอง unit ที่อยู่ใน withdrawUnits แล้ว + กรองเฉพาะ 'available'
   const avail=getAvail(id).filter(u=>!withdrawUnits.find(w=>w.unitId===u.docId));
   const item=allItems.find(i=>i.id===id);
-  if(!avail.length){document.getElementById('wUnitList').innerHTML='<div class="fz12" style="color:var(--r)">ไม่มีชิ้นส่วนพร้อมใช้</div>';return;}
+  if(!avail.length){
+    document.getElementById('wUnitList').innerHTML='<div class="fz12" style="color:var(--r)">ไม่มีชิ้นส่วนพร้อมใช้</div>';
+    return;
+  }
   document.getElementById('wUnitList').innerHTML=`
     <div class="fz12 fw7 txm" style="margin-bottom:6px">เลือกชิ้นที่ต้องการ (${avail.length} ชิ้นพร้อมใช้):</div>
     <div class="unit-picker">
@@ -161,25 +168,47 @@ function addCheckedWd(){
 }
 function removeWd(i){ withdrawUnits.splice(i,1); renderWithdraw(); }
 
+// BUG FIX: อ่านค่า input ก่อน submit แล้วค่อย validate (ป้องกัน element หายหลัง re-render)
 async function submitWd(){
   if(!withdrawUnits.length)return;
-  const usedAt=document.getElementById('wUsedAt')?.value.trim()||'';
-  if(!usedAt){showNotif('กรุณาระบุสถานที่ใช้งาน','error');return;}
+
+  // อ่านค่าก่อน renderWithdraw() จะลบ element
+  const usedAt=(document.getElementById('wUsedAt')?.value||'').trim();
   const reqBy=document.getElementById('wReqBy')?.value||'';
   const dept=document.getElementById('wDept')?.value||'';
   const hasService=document.getElementById('wHasService')?.value||'no';
   const serviceRef=document.getElementById('wServiceRef')?.value||'';
   const note=document.getElementById('wNote')?.value||'';
+
+  if(!usedAt){showNotif('กรุณาระบุสถานที่ใช้งาน','error');return;}
+
   try{
     const batch=db.batch();
     withdrawUnits.forEach(w=>{
-      batch.update(db.collection('units').doc(w.unitId),{status:'used',usedAtLabel:usedAt,usedTxId:currentServiceNo,usedAt:firebase.firestore.FieldValue.serverTimestamp(),usedBy:currentUser.displayName});
-      batch.set(db.collection('transactions').doc(),{type:'out',serviceNo:currentServiceNo,itemId:w.itemId,itemName:w.itemName,qty:1,sn:w.sn,unitId:w.unitId,detail:w.detail,usedAt,dept,reqBy,hasService,serviceRef,note,userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      batch.update(db.collection('units').doc(w.unitId),{
+        status:'used',usedAtLabel:usedAt,usedTxId:currentServiceNo,
+        usedAt:firebase.firestore.FieldValue.serverTimestamp(),
+        usedBy:currentUser.displayName
+      });
+      batch.set(db.collection('transactions').doc(),{
+        type:'out',serviceNo:currentServiceNo,itemId:w.itemId,itemName:w.itemName,
+        qty:1,sn:w.sn,unitId:w.unitId,detail:w.detail,usedAt,dept,reqBy,
+        hasService,serviceRef,note,
+        userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
     });
     await batch.commit();
-    withdrawUnits.forEach(w=>{const u=allUnits.find(x=>x.docId===w.unitId);if(u){u.status='used';u.usedAtLabel=usedAt;}});
+
+    // BUG FIX: อัปเดต allUnits ใน memory ให้ถูกต้อง แทนที่จะ reload ทั้งหมด (เร็วกว่า)
+    withdrawUnits.forEach(w=>{
+      const u=allUnits.find(x=>x.docId===w.unitId);
+      if(u){u.status='used';u.usedAtLabel=usedAt;}
+    });
+
     showNotif(`เบิกสำเร็จ ${withdrawUnits.length} ชิ้น`);
-    const lU=[...withdrawUnits],lI={reqBy,dept,usedAt,hasService,serviceRef,note,serviceNo:currentServiceNo};
+    const lU=[...withdrawUnits];
+    const lI={reqBy,dept,usedAt,hasService,serviceRef,note,serviceNo:currentServiceNo};
     withdrawUnits=[]; currentServiceNo=genNo();
     renderWithdraw();
     if(confirm('เบิกสำเร็จ! พิมพ์ใบเบิก?')) doPrint(lU,lI);

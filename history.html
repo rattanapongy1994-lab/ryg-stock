@@ -11,6 +11,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="shared.js"></script>
+<!-- SheetJS for Excel Export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="loadingScreen">
@@ -39,6 +41,8 @@
 <script>
 let currentUser=null, currentRole='user', db=null;
 let historyData=[], filterType='all', searchQ='';
+// BUG FIX: unsubscribe ก่อนที่จะ subscribe ใหม่ (prevent listener leak)
+let _histUnsub=null;
 
 initShell('history', (user, role, firestore) => {
   currentUser=user; currentRole=role; db=firestore;
@@ -46,21 +50,46 @@ initShell('history', (user, role, firestore) => {
 });
 
 function subscribeHistory(){
-  let q=db.collection('transactions').orderBy('createdAt','desc').limit(300);
+  // BUG FIX: cleanup listener เก่าก่อน
+  if(_histUnsub){ _histUnsub(); _histUnsub=null; }
+
+  let q=db.collection('transactions').orderBy('createdAt','desc').limit(500);
   if(currentRole!=='admin') q=q.where('userId','==',currentUser.uid);
-  q.onSnapshot(snap=>{
+  _histUnsub=q.onSnapshot(snap=>{
     historyData=snap.docs.map(d=>({id:d.id,...d.data()}));
     renderHistory();
+  }, err=>{
+    console.error('History listener error:', err);
+    showNotif('โหลดประวัติไม่สำเร็จ','error');
   });
 }
 
-function renderHistory(){
+// BUG FIX: safeFormatDT — กัน crash ถ้า formatDT ยังไม่พร้อม หรือ input null
+function safeFormatDT(ts){
+  try{ return (typeof formatDT==='function') ? formatDT(ts) : ''; }
+  catch(e){ return ''; }
+}
+
+function getFilteredData(){
   let data=historyData;
   if(filterType!=='all') data=data.filter(h=>h.type===filterType);
   if(searchQ){
     const q=searchQ.toLowerCase();
-    data=data.filter(h=>(h.itemName||'').toLowerCase().includes(q)||(h.sn||'').toLowerCase().includes(q)||(h.serviceNo||'').toLowerCase().includes(q)||(h.usedAt||'').toLowerCase().includes(q));
+    data=data.filter(h=>
+      (h.itemName||'').toLowerCase().includes(q)||
+      (h.sn||'').toLowerCase().includes(q)||
+      (h.serviceNo||'').toLowerCase().includes(q)||
+      (h.usedAt||'').toLowerCase().includes(q)||
+      (h.reqBy||'').toLowerCase().includes(q)||
+      (h.dept||'').toLowerCase().includes(q)
+    );
   }
+  return data;
+}
+
+function renderHistory(){
+  const data=getFilteredData();
+  const isAdmin=currentRole==='admin';
 
   document.getElementById('mainContent').innerHTML=`
   <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px">
@@ -75,9 +104,10 @@ function renderHistory(){
       </div>
       <input class="search-input" style="min-width:140px;max-width:200px" placeholder="ค้นหา..." value="${searchQ}"
         oninput="searchQ=this.value;renderHistory()"/>
+      ${isAdmin?`<button class="btn btn-sm" onclick="exportHistory()" title="Export ประวัติเป็น Excel">📥 Export</button>`:''}
     </div>
   </div>
-  <div class="fz12 txmute" style="margin-bottom:.7rem">${data.length} รายการ</div>
+  <div class="fz12 txmute" style="margin-bottom:.7rem">${data.length} รายการ${historyData.length>data.length?' (กรองจาก '+historyData.length+')'':''}</div>
   ${data.length===0?`<div class="empty-state">ยังไม่มีรายการ</div>`:`
   <div class="hist-list">
     ${data.map(h=>`
@@ -87,18 +117,70 @@ function renderHistory(){
           <span class="hist-item">${h.itemName}</span>
           ${h.type==='in'?'<span class="badge badge-in">📥 นำเข้า</span>':'<span class="badge badge-out2">📤 เบิก</span>'}
         </div>
-        ${h.sn&&h.sn!=='-'?`<div class="hist-sn">S/N: ${h.sn}</div>`:''}
+        ${(h.sn&&h.sn!=='-')?`<div class="hist-sn">S/N: ${h.sn}</div>`:''}
         <div class="hist-meta">
           ${h.usedAt?`📍 ${h.usedAt} · `:''}
           ${h.hasService==='yes'?'✅ ใบ Service ':h.hasService==='job'?'📋 Job Order ':''}
           ${h.serviceRef?`<span class="hist-ref">${h.serviceRef}</span> · `:''}
           ${h.dept?h.dept+' · ':''}
-          ${currentRole==='admin'&&h.userName?h.userName+' · ':''}
-          ${formatDT(h.createdAt)}
+          ${isAdmin&&h.userName?h.userName+' · ':''}
+          ${safeFormatDT(h.createdAt)}
         </div>
         ${h.serviceNo?`<div class="hist-ref" style="margin-top:3px">${h.serviceNo}</div>`:''}
       </div>`).join('')}
   </div>`}`;
+}
+
+// ── Export ประวัติเป็น Excel ──
+function exportHistory(){
+  const data=getFilteredData();
+  if(!data.length){ showNotif('ไม่มีข้อมูลที่จะ Export','error'); return; }
+
+  const wb=XLSX.utils.book_new();
+  const rows=[['ประเภท','เลขที่ใบเบิก','รหัสสินค้า','ชื่อสินค้า','S/N','จำนวน','ใช้งานที่','แผนก','ผู้ดำเนินการ','ใบ Service','เลขอ้างอิง','หมายเหตุ','วันที่']];
+
+  data.forEach(h=>{
+    const typeTH=h.type==='in'?'📥 นำเข้า':'📤 เบิก';
+    const svcTH={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'}[h.hasService]||'';
+    let dateStr='';
+    try{
+      if(h.createdAt?.toDate) dateStr=h.createdAt.toDate().toLocaleString('th-TH');
+      else if(h.createdAt?.seconds) dateStr=new Date(h.createdAt.seconds*1000).toLocaleString('th-TH');
+    }catch(e){}
+    rows.push([typeTH,h.serviceNo||'',h.itemId||'',h.itemName||'',h.sn||'-',h.qty||1,h.usedAt||'',h.dept||'',h.userName||'',svcTH,h.serviceRef||'',h.note||'',dateStr]);
+  });
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:10},{wch:18},{wch:10},{wch:28},{wch:18},{wch:8},{wch:14},{wch:12},{wch:16},{wch:12},{wch:16},{wch:20},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws,'ประวัติ');
+
+  // แยก sheet เบิกออก / นำเข้า
+  const outRows=data.filter(h=>h.type==='out');
+  const inRows=data.filter(h=>h.type==='in');
+  if(outRows.length){
+    const outWs=XLSX.utils.aoa_to_sheet([rows[0],...outRows.map(h=>{
+      let dateStr='';
+      try{ if(h.createdAt?.toDate) dateStr=h.createdAt.toDate().toLocaleString('th-TH'); }catch(e){}
+      const svcTH={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'}[h.hasService]||'';
+      return['📤 เบิก',h.serviceNo||'',h.itemId||'',h.itemName||'',h.sn||'-',h.qty||1,h.usedAt||'',h.dept||'',h.userName||'',svcTH,h.serviceRef||'',h.note||'',dateStr];
+    })]);
+    outWs['!cols']=ws['!cols'];
+    XLSX.utils.book_append_sheet(wb,outWs,'เบิกออก');
+  }
+  if(inRows.length){
+    const inWs=XLSX.utils.aoa_to_sheet([rows[0],...inRows.map(h=>{
+      let dateStr='';
+      try{ if(h.createdAt?.toDate) dateStr=h.createdAt.toDate().toLocaleString('th-TH'); }catch(e){}
+      return['📥 นำเข้า',h.serviceNo||'',h.itemId||'',h.itemName||'',h.sn||'-',h.qty||1,'','','',h.userName||'','','',dateStr];
+    })]);
+    inWs['!cols']=ws['!cols'];
+    XLSX.utils.book_append_sheet(wb,inWs,'นำเข้า');
+  }
+
+  const now=new Date();
+  const dateStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb,`RYG_History_${dateStr}.xlsx`);
+  showNotif(`Export ${data.length} รายการสำเร็จ`);
 }
 </script>
 </body>
