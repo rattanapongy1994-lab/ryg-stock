@@ -80,8 +80,8 @@ function renderUsers(){
             <div class="fz11 txmute" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email||''}</div>
           </div>
           ${isMe?`<span class="badge ${u.role==='admin'?'badge-admin':'badge-user'}">${u.role==='admin'?'🔑 Admin':'👤 User'}</span>`:`
-          <select style="padding:5px 8px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--font);background:var(--surf);cursor:pointer"
-            onchange="changeRole('${u.docId}',this.value,this)">
+          <select style="width: 100px; padding:5px 8px; border:1px solid var(--bdrm); border-radius:var(--radsm); font-size:12px; font-family:var(--font); background:var(--surf); cursor:pointer"
+  onchange="changeRole('${u.docId}',this.value,this)">
             <option value="user" ${u.role!=='admin'?'selected':''}>👤 User</option>
             <option value="admin" ${u.role==='admin'?'selected':''}>🔑 Admin</option>
           </select>`}
