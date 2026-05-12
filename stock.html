@@ -94,13 +94,29 @@ let importRows=[], importMode='stock'; // 'stock' | 'units'
 
 initShell('stock', async (user, role, firestore) => {
   currentUser=user; currentRole=role; db=firestore;
-  await loadItems(); await loadUnits();
+  try {
+    await loadItems();
+    await loadUnits();
+  } catch(e) {
+    console.error('Load error:', e);
+    document.getElementById('mainContent').innerHTML=
+      `<div class="empty-state" style="color:var(--r)">โหลดข้อมูลไม่สำเร็จ: ${e.message}<br><button class="btn btn-primary" style="margin-top:12px" onclick="location.reload()">ลองใหม่</button></div>`;
+    return;
+  }
   renderStock();
 });
 
 async function loadItems(){
-  const snap=await db.collection('items').orderBy('id').get();
-  allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
+  try {
+    const snap=await db.collection('items').orderBy('id').get();
+    allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
+  } catch(e) {
+    // orderBy('id') อาจต้องการ index — fallback โดยไม่ orderBy แล้วเรียง client-side
+    console.warn('loadItems orderBy failed, fallback:', e.message);
+    const snap=await db.collection('items').get();
+    allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
+    allItems.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
+  }
 }
 async function loadUnits(){
   const snap=await db.collection('units').get();
