@@ -11,6 +11,57 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="shared.js"></script>
+<style>
+/* Date picker styling */
+.date-input-wrap { position: relative; }
+.date-input-wrap input[type="date"] {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--bdrm);
+  border-radius: var(--rad);
+  font-size: 13px;
+  font-family: var(--font);
+  background: var(--surf);
+  color: var(--tx1);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.date-input-wrap input[type="date"]:focus {
+  outline: none;
+  border-color: var(--g);
+  box-shadow: 0 0 0 3px var(--gll);
+}
+.date-display {
+  font-size: 12px;
+  color: var(--tx3);
+  margin-top: 3px;
+}
+/* Quick date buttons */
+.date-quick {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.date-quick-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--bdrm);
+  border-radius: 20px;
+  background: var(--bg);
+  color: var(--tx2);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all .15s;
+}
+.date-quick-btn:hover, .date-quick-btn.active {
+  background: var(--g);
+  color: #fff;
+  border-color: var(--g);
+}
+</style>
 </head>
 <body>
 <div id="loadingScreen">
@@ -40,6 +91,19 @@
 <script>
 let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
 let withdrawUnits=[], currentServiceNo='';
+// Selected withdraw date (ISO string yyyy-mm-dd), default = today
+let selectedDate = todayISO();
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function isoToThaiLong(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' });
+}
 
 initShell('withdraw', async (user, role, firestore) => {
   currentUser=user; currentRole=role; db=firestore;
@@ -57,11 +121,35 @@ async function loadUnits(){
   allUnits=snap.docs.map(d=>({docId:d.id,...d.data()}));
 }
 
-// BUG FIX: กรองเฉพาะ 'available' อย่างเดียว (ไม่นับ used/damaged)
 const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
 const getItemQty=id=>getAvail(id).length;
 function snBadge(u){ return (u.sn&&u.sn!=='-')?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
 
+// ── Date helpers ──────────────────────────────────
+function setQuickDate(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  selectedDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // Update input + display without full re-render
+  const inp = document.getElementById('wDate');
+  if (inp) { inp.value = selectedDate; updateDateDisplay(); }
+  document.querySelectorAll('.date-quick-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.offset === String(offset));
+  });
+}
+
+function onDateChange() {
+  const inp = document.getElementById('wDate');
+  if (inp) { selectedDate = inp.value || todayISO(); updateDateDisplay(); }
+  document.querySelectorAll('.date-quick-btn').forEach(b => b.classList.remove('active'));
+}
+
+function updateDateDisplay() {
+  const el = document.getElementById('wDateDisplay');
+  if (el) el.textContent = selectedDate ? isoToThaiLong(selectedDate) : '';
+}
+
+// ── Render ────────────────────────────────────────
 function renderWithdraw(){
   document.getElementById('mainContent').innerHTML=`
   <div class="card" style="margin-bottom:1rem;padding:1rem">
@@ -71,7 +159,6 @@ function renderWithdraw(){
     </div>
     <div class="service-ref">
       <div><div class="service-ref-lbl">เลขที่ใบเบิก</div><div class="service-ref-no">${currentServiceNo}</div></div>
-      <div class="fz12" style="color:var(--gd)">${todayStr()}</div>
     </div>
     <div class="grid-2">
       <div class="field"><label>ชื่อผู้เบิก</label><input id="wReqBy" value="${currentUser?.displayName||''}"/></div>
@@ -87,6 +174,22 @@ function renderWithdraw(){
         </select></div>
     </div>
     <div class="field"><label>เลขที่ / รายละเอียดงาน</label><input id="wServiceRef" placeholder="เลขที่อ้างอิง"/></div>
+
+    <!-- ── วันที่เบิก ─────────────────────────── -->
+    <div class="field">
+      <label>📅 วันที่เบิก</label>
+      <div class="date-input-wrap">
+        <input type="date" id="wDate" value="${selectedDate}" onchange="onDateChange()"/>
+        <div class="date-quick">
+          <button class="date-quick-btn${selectedDate===todayISO()?' active':''}" data-offset="0" onclick="setQuickDate(0)">วันนี้</button>
+          <button class="date-quick-btn" data-offset="-1" onclick="setQuickDate(-1)">เมื่อวาน</button>
+          <button class="date-quick-btn" data-offset="-2" onclick="setQuickDate(-2)">2 วันก่อน</button>
+          <button class="date-quick-btn" data-offset="-7" onclick="setQuickDate(-7)">สัปดาห์ที่แล้ว</button>
+        </div>
+        <div class="date-display" id="wDateDisplay">${isoToThaiLong(selectedDate)}</div>
+      </div>
+    </div>
+
     <div class="field"><label>หมายเหตุ</label><textarea id="wNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
   </div>
 
@@ -122,7 +225,7 @@ function renderWithdraw(){
 
   <div class="wd-summary-sticky">
     <div class="flex jb items-c" style="margin-bottom:10px">
-      <div class="fz12 txmute">รวม ${withdrawUnits.length} ชิ้น · ${todayStr()}</div>
+      <div class="fz12 txmute">รวม ${withdrawUnits.length} ชิ้น · ${isoToThaiLong(selectedDate)}</div>
     </div>
     <div class="flex gap8">
       <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="submitWd()" ${withdrawUnits.length===0?'disabled':''}>✅ ยืนยันเบิก</button>
@@ -131,13 +234,15 @@ function renderWithdraw(){
   </div>`;
 }
 
-function resetWd(){ withdrawUnits=[]; currentServiceNo=genNo(); renderWithdraw(); }
+function resetWd(){
+  withdrawUnits=[]; currentServiceNo=genNo();
+  selectedDate=todayISO();
+  renderWithdraw();
+}
 
 function loadWdUnits(){
   const id=document.getElementById('wItemSel').value;
   if(!id){document.getElementById('wUnitList').innerHTML='<div class="fz12 txmute">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>';return;}
-
-  // BUG FIX: กรอง unit ที่อยู่ใน withdrawUnits แล้ว + กรองเฉพาะ 'available'
   const avail=getAvail(id).filter(u=>!withdrawUnits.find(w=>w.unitId===u.docId));
   const item=allItems.find(i=>i.id===id);
   if(!avail.length){
@@ -168,73 +273,79 @@ function addCheckedWd(){
 }
 function removeWd(i){ withdrawUnits.splice(i,1); renderWithdraw(); }
 
-// BUG FIX: อ่านค่า input ก่อน submit แล้วค่อย validate (ป้องกัน element หายหลัง re-render)
+// ── Read form values safely ────────────────────────
+function readForm(){
+  return {
+    usedAt:     (document.getElementById('wUsedAt')?.value||'').trim(),
+    reqBy:       document.getElementById('wReqBy')?.value||'',
+    dept:        document.getElementById('wDept')?.value||'',
+    hasService:  document.getElementById('wHasService')?.value||'no',
+    serviceRef:  document.getElementById('wServiceRef')?.value||'',
+    note:        document.getElementById('wNote')?.value||'',
+    withdrawDate: document.getElementById('wDate')?.value||selectedDate,
+  };
+}
+
 async function submitWd(){
   if(!withdrawUnits.length)return;
+  const f = readForm();
+  selectedDate = f.withdrawDate; // sync
+  if(!f.usedAt){showNotif('กรุณาระบุสถานที่ใช้งาน','error');return;}
 
-  // อ่านค่าก่อน renderWithdraw() จะลบ element
-  const usedAt=(document.getElementById('wUsedAt')?.value||'').trim();
-  const reqBy=document.getElementById('wReqBy')?.value||'';
-  const dept=document.getElementById('wDept')?.value||'';
-  const hasService=document.getElementById('wHasService')?.value||'no';
-  const serviceRef=document.getElementById('wServiceRef')?.value||'';
-  const note=document.getElementById('wNote')?.value||'';
-
-  if(!usedAt){showNotif('กรุณาระบุสถานที่ใช้งาน','error');return;}
+  // Convert selected date to a JS Date for Firestore timestamp
+  const txDate = new Date(f.withdrawDate + 'T00:00:00');
 
   try{
     const batch=db.batch();
     withdrawUnits.forEach(w=>{
       batch.update(db.collection('units').doc(w.unitId),{
-        status:'used',usedAtLabel:usedAt,usedTxId:currentServiceNo,
-        usedAt:firebase.firestore.FieldValue.serverTimestamp(),
-        usedBy:currentUser.displayName
+        status:'used', usedAtLabel:f.usedAt, usedTxId:currentServiceNo,
+        usedAt: firebase.firestore.Timestamp.fromDate(txDate),
+        usedBy: currentUser.displayName
       });
       batch.set(db.collection('transactions').doc(),{
-        type:'out',serviceNo:currentServiceNo,itemId:w.itemId,itemName:w.itemName,
-        qty:1,sn:w.sn,unitId:w.unitId,detail:w.detail,usedAt,dept,reqBy,
-        hasService,serviceRef,note,
-        userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,
-        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+        type:'out', serviceNo:currentServiceNo,
+        itemId:w.itemId, itemName:w.itemName,
+        qty:1, sn:w.sn, unitId:w.unitId, detail:w.detail,
+        usedAt:f.usedAt, dept:f.dept, reqBy:f.reqBy,
+        hasService:f.hasService, serviceRef:f.serviceRef, note:f.note,
+        withdrawDate: f.withdrawDate,
+        userId:currentUser.uid, userEmail:currentUser.email, userName:currentUser.displayName,
+        createdAt: firebase.firestore.Timestamp.fromDate(txDate)
       });
     });
     await batch.commit();
 
-    // BUG FIX: อัปเดต allUnits ใน memory ให้ถูกต้อง แทนที่จะ reload ทั้งหมด (เร็วกว่า)
+    // Update in-memory units
     withdrawUnits.forEach(w=>{
       const u=allUnits.find(x=>x.docId===w.unitId);
-      if(u){u.status='used';u.usedAtLabel=usedAt;}
+      if(u){u.status='used';u.usedAtLabel=f.usedAt;}
     });
 
     showNotif(`เบิกสำเร็จ ${withdrawUnits.length} ชิ้น`);
     const lU=[...withdrawUnits];
-    const lI={reqBy,dept,usedAt,hasService,serviceRef,note,serviceNo:currentServiceNo};
-    withdrawUnits=[]; currentServiceNo=genNo();
+    const lF={...f, serviceNo:currentServiceNo};
+    withdrawUnits=[]; currentServiceNo=genNo(); selectedDate=todayISO();
     renderWithdraw();
-    if(confirm('เบิกสำเร็จ! พิมพ์ใบเบิก?')) doPrint(lU,lI);
+    if(confirm('เบิกสำเร็จ! พิมพ์ใบเบิก?')) doPrint(lU, lF);
   }catch(e){showNotif(e.message,'error');}
 }
 
 function printWd(){
-  doPrint(withdrawUnits,{
-    reqBy:document.getElementById('wReqBy')?.value||'',
-    dept:document.getElementById('wDept')?.value||'',
-    usedAt:document.getElementById('wUsedAt')?.value||'',
-    hasService:document.getElementById('wHasService')?.value||'no',
-    serviceRef:document.getElementById('wServiceRef')?.value||'',
-    note:document.getElementById('wNote')?.value||'',
-    serviceNo:currentServiceNo
-  });
+  const f = readForm();
+  selectedDate = f.withdrawDate;
+  doPrint(withdrawUnits,{...f, serviceNo:currentServiceNo});
 }
 
-function doPrint(units,info){
+function doPrint(units, info){
   const stm={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'};
+  const dateLabel = info.withdrawDate ? isoToThaiLong(info.withdrawDate) : isoToThaiLong(todayISO());
   document.getElementById('printArea').innerHTML=`
   <div class="print-doc">
     <div class="print-header"><div class="print-title">ใบเบิกสินค้า / Spare Part Requisition</div><div>RYG Stock System</div></div>
     <div class="print-meta">
       <div><div class="pm-lbl">เลขที่ใบเบิก</div><div class="pm-val" style="font-size:16px">${info.serviceNo}</div></div>
-      <div><div class="pm-lbl">วันที่</div><div class="pm-val">${todayStr()}</div></div>
+      <div><div class="pm-lbl">วันที่เบิก</div><div class="pm-val">${dateLabel}</div></div>
       <div><div class="pm-lbl">ผู้เบิก</div><div class="pm-val">${info.reqBy}</div></div>
       <div><div class="pm-lbl">แผนก</div><div class="pm-val">${info.dept||'-'}</div></div>
       <div><div class="pm-lbl">ใช้งานที่</div><div class="pm-val">${info.usedAt||'-'}</div></div>
