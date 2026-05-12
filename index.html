@@ -88,7 +88,7 @@
 
   .nav-tabs {
     background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 0 1.5rem; display: flex; gap: 0;
+    padding: 0 1.5rem; display: flex; gap: 0; overflow-x: auto;
   }
   .nav-tab {
     padding: 12px 18px; font-size: 13px; color: var(--text-2); cursor: pointer;
@@ -230,6 +230,20 @@
   .service-ref-label { font-size: 12px; color: var(--green-dark); }
   .service-ref-no { font-size: 18px; font-weight: 700; color: var(--green-dark); font-family: monospace; }
 
+  /* ========== USER MANAGEMENT ========== */
+  .role-select {
+    padding: 5px 10px; border: 1px solid var(--border-md); border-radius: var(--radius);
+    font-size: 12px; font-family: var(--font); background: var(--surface); cursor: pointer;
+  }
+  .role-select:focus { outline: none; border-color: var(--green); }
+  .user-row-avatar {
+    width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+    background: var(--green-light); display: inline-flex; align-items: center;
+    justify-content: center; font-size: 13px; font-weight: 700; color: var(--green-dark);
+    flex-shrink: 0; vertical-align: middle;
+  }
+  .user-info { display: inline-flex; flex-direction: column; vertical-align: middle; margin-left: 10px; }
+
   /* ========== PRINT ========== */
   @media print {
     #mainApp, .topbar, .nav-tabs, .content { display: none !important; }
@@ -343,11 +357,7 @@
     </div>
   </div>
   <div class="nav-tabs" id="navTabs">
-    <div class="nav-tab active" id="nav-dashboard" onclick="showTab('dashboard')">📊 Dashboard</div>
-    <div class="nav-tab" id="nav-stock" onclick="showTab('stock')">📦 สต็อกสินค้า</div>
-    <div class="nav-tab" id="nav-qr" onclick="showTab('qr')">📷 สแกน QR</div>
-    <div class="nav-tab" id="nav-withdraw" onclick="showTab('withdraw')">📤 เบิกสินค้า</div>
-    <div class="nav-tab" id="nav-history" onclick="showTab('history')">🕐 ประวัติ</div>
+    <!-- tabs rendered dynamically based on role -->
   </div>
   <div class="content" id="mainContent">
     <div style="text-align:center;padding:3rem;color:var(--text-3);">กำลังโหลด...</div>
@@ -356,12 +366,11 @@
 
 <!-- PRINT AREA -->
 <div id="printArea"></div>
-
 <div id="notif"></div>
 
 <script>
 // ============================================================
-// 🔧 FIREBASE CONFIG — แก้ไขตรงนี้ด้วย config จาก Firebase Console
+// 🔧 FIREBASE CONFIG
 // ============================================================
 const firebaseConfig = {
   apiKey: "AIzaSyABKbRCDNh5SHwvbuFtAudLnRYepZfXk7s",
@@ -390,6 +399,35 @@ let withdrawItems = [];
 let currentServiceNo = '';
 
 // ============================================================
+// TAB CONFIG — ตาม role
+// ============================================================
+const TABS_ADMIN = [
+  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+  { id: 'stock',     icon: '📦', label: 'สต็อกสินค้า' },
+  { id: 'qr',        icon: '📷', label: 'สแกน QR' },
+  { id: 'withdraw',  icon: '📤', label: 'เบิกสินค้า' },
+  { id: 'history',   icon: '🕐', label: 'ประวัติ' },
+  { id: 'users',     icon: '👥', label: 'ผู้ใช้งาน' },
+];
+const TABS_USER = [
+  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+  { id: 'qr',        icon: '📷', label: 'สแกน QR' },
+  { id: 'history',   icon: '🕐', label: 'ประวัติ' },
+];
+
+function getTabList() {
+  return currentRole === 'admin' ? TABS_ADMIN : TABS_USER;
+}
+
+function renderNavTabs() {
+  const tabs = getTabList();
+  document.getElementById('navTabs').innerHTML = tabs.map(t => `
+    <div class="nav-tab ${currentTab === t.id ? 'active' : ''}" id="nav-${t.id}" onclick="showTab('${t.id}')">
+      ${t.icon} ${t.label}
+    </div>`).join('');
+}
+
+// ============================================================
 // AUTH
 // ============================================================
 auth.onAuthStateChanged(async (user) => {
@@ -415,11 +453,10 @@ async function loadUserRole(user) {
     if (doc.exists) {
       currentRole = doc.data().role || 'user';
     } else {
-      // สร้าง user record ใหม่ — default เป็น user
       await db.collection('users').doc(user.uid).set({
         email: user.email,
         displayName: user.displayName,
-        photoURL: user.photoURL,
+        photoURL: user.photoURL || '',
         role: 'user',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -464,7 +501,6 @@ function doLogout() {
 async function loadItems() {
   const snap = await db.collection('items').orderBy('id').get();
   allItems = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
-  // Seed ถ้าว่างเปล่า
   if (allItems.length === 0) await seedItems();
 }
 
@@ -551,16 +587,19 @@ function subscribeHistory() {
 // TAB ROUTING
 // ============================================================
 function showTab(tab) {
+  // Guard: user ไม่มีสิทธิ์เข้า tab ที่ไม่อยู่ใน list
+  const allowed = getTabList().map(t => t.id);
+  if (!allowed.includes(tab)) tab = 'dashboard';
+
   currentTab = tab;
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  const navEl = document.getElementById('nav-' + tab);
-  if (navEl) navEl.classList.add('active');
-  const c = document.getElementById('mainContent');
+  renderNavTabs();
+
   if (tab === 'dashboard') renderDashboardTab();
   else if (tab === 'stock') renderStockTab();
   else if (tab === 'qr') renderQRTab();
   else if (tab === 'withdraw') renderWithdrawTab();
   else if (tab === 'history') renderHistoryTab();
+  else if (tab === 'users') renderUsersTab();
 }
 
 // ============================================================
@@ -588,7 +627,7 @@ function todayStr() {
 }
 
 // ============================================================
-// DASHBOARD
+// DASHBOARD — ทั้ง Admin และ User เห็นได้
 // ============================================================
 function renderDashboardTab() {
   const total = allItems.reduce((a, i) => a + i.qty, 0);
@@ -676,7 +715,7 @@ function renderDashboardTab() {
 }
 
 // ============================================================
-// STOCK TAB
+// STOCK TAB — Admin only
 // ============================================================
 function renderStockTab() {
   const isAdmin = currentRole === 'admin';
@@ -782,7 +821,9 @@ function renderQRTab() {
     <button class="btn btn-primary" style="width:100%" onclick="doQROp()">
       ${scanOp==='out'?'✅ ยืนยันการเบิก':'✅ ยืนยันการนำเข้า'}
     </button>
-    ` : ''}
+    ` : `<div style="background:var(--blue-light);border-radius:var(--radius);padding:12px;font-size:13px;color:var(--blue);text-align:center;">
+      ℹ️ เฉพาะ Admin เท่านั้นที่สามารถเบิก/นำเข้าสินค้าได้
+    </div>`}
 
     <button class="btn" style="width:100%;margin-top:8px;justify-content:center" onclick="resetScan()">🔄 สแกนใหม่</button>
     ` : ''}
@@ -827,7 +868,7 @@ async function doQROp() {
 }
 
 // ============================================================
-// WITHDRAW TAB (ใบเบิก)
+// WITHDRAW TAB — Admin only
 // ============================================================
 function renderWithdrawTab() {
   if (!currentServiceNo) currentServiceNo = genServiceNo();
@@ -840,7 +881,6 @@ function renderWithdrawTab() {
         <button class="btn" onclick="withdrawItems=[];currentServiceNo=genServiceNo();renderWithdrawTab()">🔄 ล้างรายการ</button>
       </div>
 
-      <!-- Info -->
       <div class="card" style="margin-bottom:1rem;padding:1.25rem">
         <div class="service-ref">
           <div>
@@ -869,7 +909,6 @@ function renderWithdrawTab() {
           <textarea id="wNote" placeholder="รายละเอียดเพิ่มเติม..."></textarea></div>
       </div>
 
-      <!-- Add item -->
       <div class="card" style="padding:1.25rem;margin-bottom:1rem">
         <div style="font-size:13px;font-weight:600;margin-bottom:10px">เพิ่มรายการสินค้า</div>
         <div class="flex gap8 items-center">
@@ -883,7 +922,6 @@ function renderWithdrawTab() {
         </div>
       </div>
 
-      <!-- Item list -->
       ${withdrawItems.length > 0 ? `
       <div class="card">
         <div class="card-header"><span class="card-title">รายการที่จะเบิก (${withdrawItems.length} รายการ)</span></div>
@@ -905,7 +943,6 @@ function renderWithdrawTab() {
       </div>`}
     </div>
 
-    <!-- RIGHT: Confirm -->
     <div>
       <div class="card" style="padding:1.25rem">
         <div style="font-size:14px;font-weight:600;margin-bottom:1rem">สรุปใบเบิก</div>
@@ -967,79 +1004,50 @@ async function submitWithdraw() {
 
   try {
     const batch = db.batch();
-    const txns = [];
-
     for (const w of withdrawItems) {
       const item = allItems.find(i => i.id === w.id);
-      if (!item || item.qty < w.qty) {
-        showNotif(`${w.name}: สต็อกไม่พอ!`, 'error'); return;
-      }
-      // Update stock
-      const itemRef = db.collection('items').doc(w.id);
-      batch.update(itemRef, { qty: item.qty - w.qty });
-
-      // Transaction record
-      const txRef = db.collection('transactions').doc();
-      const txData = {
-        type: 'out',
-        serviceNo: currentServiceNo,
-        itemId: w.id,
-        itemName: w.name,
-        qty: w.qty,
-        usedAt,
-        dept,
-        reqBy,
-        hasService,
-        serviceRef,
-        note,
-        userId: currentUser.uid,
-        userEmail: currentUser.email,
-        userName: currentUser.displayName,
+      if (!item || item.qty < w.qty) { showNotif(`${w.name}: สต็อกไม่พอ!`, 'error'); return; }
+      batch.update(db.collection('items').doc(w.id), { qty: item.qty - w.qty });
+      batch.set(db.collection('transactions').doc(), {
+        type: 'out', serviceNo: currentServiceNo,
+        itemId: w.id, itemName: w.name, qty: w.qty,
+        usedAt, dept, reqBy, hasService, serviceRef, note,
+        userId: currentUser.uid, userEmail: currentUser.email, userName: currentUser.displayName,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      batch.set(txRef, txData);
-      txns.push(txData);
+      });
     }
-
     await batch.commit();
-
-    // Update local state
     withdrawItems.forEach(w => {
       const item = allItems.find(i => i.id === w.id);
       if (item) item.qty -= w.qty;
     });
-
     showNotif(`เบิกสำเร็จ ${withdrawItems.length} รายการ — ${currentServiceNo}`);
     const lastItems = [...withdrawItems];
     const lastInfo = { reqBy, dept, usedAt, hasService, serviceRef, note, serviceNo: currentServiceNo };
     withdrawItems = [];
-    const oldNo = currentServiceNo;
     currentServiceNo = genServiceNo();
     renderWithdrawTab();
-
-    // Auto-print prompt
-    if (confirm('เบิกสำเร็จ! ต้องการพิมพ์ใบเบิกหรือไม่?')) {
-      doPrint(lastItems, lastInfo);
-    }
+    if (confirm('เบิกสำเร็จ! ต้องการพิมพ์ใบเบิกหรือไม่?')) doPrint(lastItems, lastInfo);
   } catch(e) {
     showNotif(e.message, 'error');
   }
 }
 
 function printWithdraw() {
-  const reqBy = document.getElementById('wReqBy')?.value || '';
-  const dept = document.getElementById('wDept')?.value || '';
-  const usedAt = document.getElementById('wUsedAt')?.value || '';
-  const hasService = document.getElementById('wHasService')?.value || 'no';
-  const serviceRef = document.getElementById('wServiceRef')?.value || '';
-  const note = document.getElementById('wNote')?.value || '';
-  doPrint(withdrawItems, { reqBy, dept, usedAt, hasService, serviceRef, note, serviceNo: currentServiceNo });
+  doPrint(withdrawItems, {
+    reqBy: document.getElementById('wReqBy')?.value || '',
+    dept: document.getElementById('wDept')?.value || '',
+    usedAt: document.getElementById('wUsedAt')?.value || '',
+    hasService: document.getElementById('wHasService')?.value || 'no',
+    serviceRef: document.getElementById('wServiceRef')?.value || '',
+    note: document.getElementById('wNote')?.value || '',
+    serviceNo: currentServiceNo
+  });
 }
 
 function doPrint(items, info) {
   const serviceTypeMap = { no: 'ไม่มี', yes: 'ใบ Service', job: 'Job Order' };
-  const printArea = document.getElementById('printArea');
-  printArea.innerHTML = `
+  document.getElementById('printArea').innerHTML = `
   <div class="print-doc">
     <div class="print-header">
       <div class="print-title">ใบเบิกสินค้า / Spare Part Requisition</div>
@@ -1066,18 +1074,26 @@ function doPrint(items, info) {
       <div class="sign-box"><div class="sign-line">ลงชื่อ ผู้อนุมัติ<br>(${currentUser?.displayName||''})</div></div>
     </div>
   </div>`;
-  printArea.style.display = 'block';
+  document.getElementById('printArea').style.display = 'block';
   window.print();
-  setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+  setTimeout(() => { document.getElementById('printArea').style.display = 'none'; }, 1000);
 }
 
 // ============================================================
 // HISTORY TAB
 // ============================================================
 function renderHistoryTab() {
+  // User เห็นเฉพาะรายการของตัวเอง, Admin เห็นทั้งหมด
+  const data = currentRole === 'admin'
+    ? historyData
+    : historyData.filter(h => h.userId === currentUser?.uid);
+
   document.getElementById('mainContent').innerHTML = `
   <div class="flex justify-between items-center section-gap">
-    <div style="font-size:15px;font-weight:600">ประวัติการเคลื่อนไหวทั้งหมด</div>
+    <div style="font-size:15px;font-weight:600">
+      ประวัติการเคลื่อนไหว${currentRole === 'user' ? ' (ของฉัน)' : 'ทั้งหมด'}
+    </div>
+    ${currentRole === 'user' ? `<div style="font-size:12px;color:var(--blue);background:var(--blue-light);padding:4px 10px;border-radius:20px;">แสดงเฉพาะรายการที่คุณดำเนินการ</div>` : ''}
   </div>
   <div class="card">
     <div class="table-wrap">
@@ -1089,11 +1105,11 @@ function renderHistoryTab() {
           <th style="width:60px;text-align:center">จำนวน</th>
           <th style="width:110px">ใช้งานที่</th>
           <th style="width:90px">ใบ Service</th>
-          <th style="width:130px">ผู้ดำเนินการ</th>
+          ${currentRole === 'admin' ? '<th style="width:130px">ผู้ดำเนินการ</th>' : ''}
           <th style="width:140px">วันที่-เวลา</th>
         </tr>
-        ${historyData.length === 0 ? `<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:2rem">ยังไม่มีรายการ</td></tr>` :
-          historyData.map(h => `
+        ${data.length === 0 ? `<tr><td colspan="${currentRole==='admin'?8:7}" style="text-align:center;color:var(--text-3);padding:2rem">ยังไม่มีรายการ</td></tr>` :
+          data.map(h => `
           <tr>
             <td>${h.type==='in'?'<span class="badge badge-in">📥 นำเข้า</span>':'<span class="badge badge-out2">📤 เบิก</span>'}</td>
             <td class="mono text-sm text-muted">${h.serviceNo||'-'}</td>
@@ -1104,15 +1120,112 @@ function renderHistoryTab() {
             <td style="text-align:center;font-weight:700">${h.qty}</td>
             <td style="font-size:12px">${h.usedAt||'-'}</td>
             <td style="font-size:12px">${h.hasService==='yes'?'✅ ใบ Service':h.hasService==='job'?'📋 Job Order':'—'} ${h.serviceRef?'<br><span class="mono text-muted">'+h.serviceRef+'</span>':''}</td>
-            <td>
-              <div style="font-size:12px;font-weight:500">${h.userName||'-'}</div>
-              <div class="text-sm text-muted">${h.userEmail||''}</div>
-            </td>
+            ${currentRole === 'admin' ? `<td><div style="font-size:12px;font-weight:500">${h.userName||'-'}</div><div class="text-sm text-muted">${h.userEmail||''}</div></td>` : ''}
             <td style="font-size:12px;color:var(--text-3)">${formatDT(h.createdAt)}</td>
           </tr>`).join('')}
       </table>
     </div>
   </div>`;
+}
+
+// ============================================================
+// USERS TAB — Admin only: จัดการสิทธิ์ผู้ใช้
+// ============================================================
+let allUsers = [];
+
+async function renderUsersTab() {
+  document.getElementById('mainContent').innerHTML = `
+  <div class="flex justify-between items-center section-gap">
+    <div style="font-size:15px;font-weight:600">👥 จัดการผู้ใช้งาน</div>
+    <div style="font-size:12px;color:var(--text-3)">เปลี่ยนสิทธิ์จะมีผลทันทีเมื่อ User ล็อกอินใหม่</div>
+  </div>
+  <div class="card" id="usersCard">
+    <div style="padding:2rem;text-align:center;color:var(--text-3)">กำลังโหลดรายชื่อผู้ใช้...</div>
+  </div>`;
+
+  try {
+    const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
+    allUsers = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    renderUsersTable();
+  } catch(e) {
+    document.getElementById('usersCard').innerHTML =
+      `<div style="padding:2rem;text-align:center;color:var(--red)">โหลดข้อมูลไม่สำเร็จ: ${e.message}</div>`;
+  }
+}
+
+function renderUsersTable() {
+  document.getElementById('usersCard').innerHTML = `
+  <div class="table-wrap">
+    <table>
+      <tr>
+        <th>ผู้ใช้</th>
+        <th style="width:180px">Email</th>
+        <th style="width:130px">สิทธิ์ปัจจุบัน</th>
+        <th style="width:160px">เปลี่ยนสิทธิ์</th>
+        <th style="width:140px">วันที่สมัคร</th>
+      </tr>
+      ${allUsers.map(u => {
+        const isMe = u.docId === currentUser?.uid;
+        const initials = (u.displayName || u.email || 'U')[0].toUpperCase();
+        return `<tr ${isMe ? 'style="background:#FFFDE7"' : ''}>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px">
+              ${u.photoURL
+                ? `<img src="${u.photoURL}" class="user-row-avatar" onerror="this.style.display='none'" />`
+                : `<span class="user-row-avatar">${initials}</span>`}
+              <div>
+                <div style="font-weight:600;font-size:13px">${u.displayName || '(ไม่มีชื่อ)'}${isMe ? ' <span style="font-size:11px;color:var(--green-dark);background:var(--green-light);padding:1px 6px;border-radius:10px">คุณ</span>' : ''}</div>
+                <div style="font-size:11px;color:var(--text-3)">${u.docId}</div>
+              </div>
+            </div>
+          </td>
+          <td style="font-size:12px;color:var(--text-2)">${u.email || '-'}</td>
+          <td>
+            <span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">
+              ${u.role === 'admin' ? '🔑 Admin' : '👤 User'}
+            </span>
+          </td>
+          <td>
+            ${isMe
+              ? `<span style="font-size:12px;color:var(--text-3)">ไม่สามารถเปลี่ยนสิทธิ์ตัวเองได้</span>`
+              : `<select class="role-select" onchange="changeUserRole('${u.docId}', this.value, this)">
+                  <option value="user" ${u.role !== 'admin' ? 'selected' : ''}>👤 User</option>
+                  <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>🔑 Admin</option>
+                </select>`}
+          </td>
+          <td style="font-size:12px;color:var(--text-3)">${formatDT(u.createdAt)}</td>
+        </tr>`;
+      }).join('')}
+    </table>
+  </div>
+  <div style="padding:12px 16px;background:#FAFAFA;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);">
+    รวม ${allUsers.length} บัญชี · Admin ${allUsers.filter(u=>u.role==='admin').length} คน · User ${allUsers.filter(u=>u.role!=='admin').length} คน
+  </div>`;
+}
+
+async function changeUserRole(uid, newRole, selectEl) {
+  const user = allUsers.find(u => u.docId === uid);
+  if (!user) return;
+
+  const oldRole = user.role || 'user';
+  if (oldRole === newRole) return;
+
+  const label = newRole === 'admin' ? 'Admin (มีสิทธิ์เต็ม)' : 'User (ดู Dashboard, สแกน QR, ดูประวัติตัวเอง)';
+  if (!confirm(`เปลี่ยนสิทธิ์ "${user.displayName || user.email}" เป็น ${label}?`)) {
+    // revert select
+    selectEl.value = oldRole;
+    return;
+  }
+
+  try {
+    await db.collection('users').doc(uid).update({ role: newRole });
+    user.role = newRole;
+    showNotif(`เปลี่ยนสิทธิ์ ${user.displayName || user.email} เป็น ${newRole} สำเร็จ`);
+    renderUsersTable(); // re-render เพื่ออัปเดต badge
+  } catch(e) {
+    showNotif('เปลี่ยนสิทธิ์ไม่สำเร็จ: ' + e.message, 'error');
+    selectEl.value = oldRole;
+  }
 }
 
 // ============================================================
