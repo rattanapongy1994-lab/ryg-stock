@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>RYG Stock — เบิกสินค้า</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body>
+<div id="loadingScreen">
+  <div style="width:52px;height:52px;background:#1D9E75;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;">📦</div>
+  <div style="font-size:15px;font-weight:700;">RYG Stock System</div>
+  <div class="spinner"></div>
+</div>
+<div id="mainApp">
+  <div class="topbar">
+    <div class="topbar-logo">📦</div>
+    <span class="topbar-title">RYG Stock</span>
+    <div class="user-mini">
+      <img id="uAvatar" class="user-ava" src="" onerror="this.style.display='none'" alt=""/>
+      <span id="uFallback" class="user-ava"></span>
+      <span id="uName" class="user-name-top"></span>
+      <span id="uRole" class="badge-role badge-admin"></span>
+      <button class="btn-topout" onclick="doLogout()">ออก</button>
+    </div>
+  </div>
+  <div class="nav-tabs" id="navTabs"></div>
+  <div class="content" id="mainContent"></div>
+  <nav class="bottom-nav" id="bottomNav"></nav>
+</div>
+<div id="printArea"></div>
+<div id="notif"></div>
+
+<script>
+let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
+let withdrawUnits=[], currentServiceNo='';
+
+initShell('withdraw', async (user, role, firestore) => {
+  currentUser=user; currentRole=role; db=firestore;
+  currentServiceNo=genNo();
+  await loadItems(); await loadUnits();
+  renderWithdraw();
+});
+
+async function loadItems(){
+  const snap=await db.collection('items').orderBy('id').get();
+  allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
+}
+async function loadUnits(){
+  const snap=await db.collection('units').get();
+  allUnits=snap.docs.map(d=>({docId:d.id,...d.data()}));
+}
+const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
+const getItemQty=id=>getAvail(id).length;
+function snBadge(u){ return u.sn&&u.sn!=='-'?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
+
+function renderWithdraw(){
+  document.getElementById('mainContent').innerHTML=`
+  <div class="card" style="margin-bottom:1rem;padding:1rem">
+    <div class="flex jb items-c section-gap">
+      <span style="font-size:15px;font-weight:700">📤 ใบเบิกสินค้า</span>
+      <button class="btn btn-sm" onclick="resetWd()">🔄 ล้าง</button>
+    </div>
+    <div class="service-ref">
+      <div><div class="service-ref-lbl">เลขที่ใบเบิก</div><div class="service-ref-no">${currentServiceNo}</div></div>
+      <div class="fz12" style="color:var(--gd)">${todayStr()}</div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>ชื่อผู้เบิก</label><input id="wReqBy" value="${currentUser?.displayName||''}"/></div>
+      <div class="field"><label>แผนก</label><input id="wDept" placeholder="เช่น ฝ่าย IT"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>ใช้งานที่ *</label><input id="wUsedAt" placeholder="เช่น PC-05"/></div>
+      <div class="field"><label>ใบ Service</label>
+        <select id="wHasService">
+          <option value="no">ไม่มี</option>
+          <option value="yes">ใบ Service</option>
+          <option value="job">Job Order</option>
+        </select></div>
+    </div>
+    <div class="field"><label>เลขที่ / รายละเอียดงาน</label><input id="wServiceRef" placeholder="เลขที่อ้างอิง"/></div>
+    <div class="field"><label>หมายเหตุ</label><textarea id="wNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
+  </div>
+
+  <div class="card" style="margin-bottom:1rem;padding:1rem">
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">เลือกสินค้าและชิ้นส่วน</div>
+    <div class="field">
+      <label>ประเภทสินค้า</label>
+      <select id="wItemSel" onchange="loadWdUnits()">
+        <option value="">— เลือก —</option>
+        ${allItems.map(i=>`<option value="${i.id}">${i.id} – ${i.name} (${getItemQty(i.id)} ชิ้น)</option>`).join('')}
+      </select>
+    </div>
+    <div id="wUnitList" class="fz12 txmute">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>
+  </div>
+
+  ${withdrawUnits.length>0?`
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-header"><span class="card-title">รายการที่จะเบิก (${withdrawUnits.length} ชิ้น)</span></div>
+    <div style="padding:.75rem 1rem">
+      <div class="wd-list">
+        ${withdrawUnits.map((w,i)=>`
+          <div class="wd-item">
+            <div class="wd-item-info">
+              <div class="wd-item-name">${w.itemName}</div>
+              <div class="wd-item-meta">${w.itemId}${w.sn&&w.sn!=='-'?' · S/N: '+w.sn:''} ${w.detail?' · '+w.detail:''}</div>
+            </div>
+            <button class="btn btn-icon btn-sm btn-danger" onclick="removeWd(${i})">✕</button>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`:`
+  <div class="empty-state" style="border:1.5px dashed var(--bdrm);border-radius:var(--rad);margin-bottom:1rem">ยังไม่มีรายการ</div>`}
+
+  <div class="wd-summary-sticky">
+    <div class="flex jb items-c" style="margin-bottom:10px">
+      <div class="fz12 txmute">รวม ${withdrawUnits.length} ชิ้น · ${todayStr()}</div>
+    </div>
+    <div class="flex gap8">
+      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="submitWd()" ${withdrawUnits.length===0?'disabled':''}>✅ ยืนยันเบิก</button>
+      <button class="btn" style="flex:1;justify-content:center" onclick="printWd()" ${withdrawUnits.length===0?'disabled':''}>🖨️ พิมพ์</button>
+    </div>
+  </div>`;
+}
+
+function resetWd(){ withdrawUnits=[]; currentServiceNo=genNo(); renderWithdraw(); }
+
+function loadWdUnits(){
+  const id=document.getElementById('wItemSel').value;
+  if(!id){document.getElementById('wUnitList').innerHTML='<div class="fz12 txmute">เลือกประเภทสินค้าเพื่อดูชิ้นส่วน</div>';return;}
+  const avail=getAvail(id).filter(u=>!withdrawUnits.find(w=>w.unitId===u.docId));
+  const item=allItems.find(i=>i.id===id);
+  if(!avail.length){document.getElementById('wUnitList').innerHTML='<div class="fz12" style="color:var(--r)">ไม่มีชิ้นส่วนพร้อมใช้</div>';return;}
+  document.getElementById('wUnitList').innerHTML=`
+    <div class="fz12 fw7 txm" style="margin-bottom:6px">เลือกชิ้นที่ต้องการ (${avail.length} ชิ้นพร้อมใช้):</div>
+    <div class="unit-picker">
+      ${avail.map(u=>`
+        <label class="unit-pick-row">
+          <input type="checkbox" class="upick-cb" value="${u.docId}" data-item="${id}" data-name="${item.name}" data-sn="${u.sn||'-'}" data-detail="${u.detail||''}"/>
+          ${snBadge(u)}
+          <span class="fz12 txm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.detail||'ไม่มีรายละเอียด'}</span>
+        </label>`).join('')}
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addCheckedWd()">+ เพิ่มที่เลือก</button>`;
+}
+
+function addCheckedWd(){
+  const cbs=[...document.querySelectorAll('.upick-cb:checked')];
+  if(!cbs.length){showNotif('เลือกอย่างน้อย 1 ชิ้น','error');return;}
+  cbs.forEach(cb=>{
+    if(!withdrawUnits.find(w=>w.unitId===cb.value))
+      withdrawUnits.push({unitId:cb.value,itemId:cb.dataset.item,itemName:cb.dataset.name,sn:cb.dataset.sn,detail:cb.dataset.detail});
+  });
+  renderWithdraw();
+}
+function removeWd(i){ withdrawUnits.splice(i,1); renderWithdraw(); }
+
+async function submitWd(){
+  if(!withdrawUnits.length)return;
+  const usedAt=document.getElementById('wUsedAt')?.value.trim()||'';
+  if(!usedAt){showNotif('กรุณาระบุสถานที่ใช้งาน','error');return;}
+  const reqBy=document.getElementById('wReqBy')?.value||'';
+  const dept=document.getElementById('wDept')?.value||'';
+  const hasService=document.getElementById('wHasService')?.value||'no';
+  const serviceRef=document.getElementById('wServiceRef')?.value||'';
+  const note=document.getElementById('wNote')?.value||'';
+  try{
+    const batch=db.batch();
+    withdrawUnits.forEach(w=>{
+      batch.update(db.collection('units').doc(w.unitId),{status:'used',usedAtLabel:usedAt,usedTxId:currentServiceNo,usedAt:firebase.firestore.FieldValue.serverTimestamp(),usedBy:currentUser.displayName});
+      batch.set(db.collection('transactions').doc(),{type:'out',serviceNo:currentServiceNo,itemId:w.itemId,itemName:w.itemName,qty:1,sn:w.sn,unitId:w.unitId,detail:w.detail,usedAt,dept,reqBy,hasService,serviceRef,note,userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    });
+    await batch.commit();
+    withdrawUnits.forEach(w=>{const u=allUnits.find(x=>x.docId===w.unitId);if(u){u.status='used';u.usedAtLabel=usedAt;}});
+    showNotif(`เบิกสำเร็จ ${withdrawUnits.length} ชิ้น`);
+    const lU=[...withdrawUnits],lI={reqBy,dept,usedAt,hasService,serviceRef,note,serviceNo:currentServiceNo};
+    withdrawUnits=[]; currentServiceNo=genNo();
+    renderWithdraw();
+    if(confirm('เบิกสำเร็จ! พิมพ์ใบเบิก?')) doPrint(lU,lI);
+  }catch(e){showNotif(e.message,'error');}
+}
+
+function printWd(){
+  doPrint(withdrawUnits,{
+    reqBy:document.getElementById('wReqBy')?.value||'',
+    dept:document.getElementById('wDept')?.value||'',
+    usedAt:document.getElementById('wUsedAt')?.value||'',
+    hasService:document.getElementById('wHasService')?.value||'no',
+    serviceRef:document.getElementById('wServiceRef')?.value||'',
+    note:document.getElementById('wNote')?.value||'',
+    serviceNo:currentServiceNo
+  });
+}
+
+function doPrint(units,info){
+  const stm={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'};
+  document.getElementById('printArea').innerHTML=`
+  <div class="print-doc">
+    <div class="print-header"><div class="print-title">ใบเบิกสินค้า / Spare Part Requisition</div><div>RYG Stock System</div></div>
+    <div class="print-meta">
+      <div><div class="pm-lbl">เลขที่ใบเบิก</div><div class="pm-val" style="font-size:16px">${info.serviceNo}</div></div>
+      <div><div class="pm-lbl">วันที่</div><div class="pm-val">${todayStr()}</div></div>
+      <div><div class="pm-lbl">ผู้เบิก</div><div class="pm-val">${info.reqBy}</div></div>
+      <div><div class="pm-lbl">แผนก</div><div class="pm-val">${info.dept||'-'}</div></div>
+      <div><div class="pm-lbl">ใช้งานที่</div><div class="pm-val">${info.usedAt||'-'}</div></div>
+      <div><div class="pm-lbl">ใบ Service</div><div class="pm-val">${stm[info.hasService]||'-'} ${info.serviceRef?'('+info.serviceRef+')':''}</div></div>
+      <div><div class="pm-lbl">ผู้อนุมัติ</div><div class="pm-val">${currentUser?.displayName||''}</div></div>
+      <div><div class="pm-lbl">Email</div><div class="pm-val">${currentUser?.email||''}</div></div>
+    </div>
+    ${info.note?`<div style="background:#f5f5f5;border-radius:6px;padding:8px 10px;margin-bottom:1rem;font-size:12px"><b>หมายเหตุ:</b> ${info.note}</div>`:''}
+    <table class="print-table">
+      <tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th><th>S/N</th><th>รายละเอียด</th><th>หมายเหตุ</th></tr>
+      ${units.map((w,i)=>`<tr><td>${i+1}</td><td>${w.itemId}</td><td>${w.itemName}</td><td style="font-family:monospace">${w.sn||'-'}</td><td>${w.detail||'-'}</td><td></td></tr>`).join('')}
+      <tr><td colspan="5" style="text-align:right;font-weight:700">รวม</td><td style="font-weight:700">${units.length} ชิ้น</td></tr>
+    </table>
+    <div class="print-sign">
+      <div class="sign-box"><div class="sign-line">ลงชื่อ ผู้เบิก<br>(${info.reqBy})</div></div>
+      <div class="sign-box"><div class="sign-line">ลงชื่อ ผู้อนุมัติ<br>(${currentUser?.displayName||''})</div></div>
+    </div>
+  </div>`;
+  document.getElementById('printArea').style.display='block';
+  window.print();
+  setTimeout(()=>{document.getElementById('printArea').style.display='none';},1000);
+}
+</script>
+</body>
+</html>

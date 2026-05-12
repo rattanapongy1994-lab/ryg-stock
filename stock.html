@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>RYG Stock — สต็อก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="shared.js"></script>
+<style>
+/* Add mode toggle */
+.add-mode-tabs{display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden;}
+.add-mode-tab{flex:1;padding:9px;font-size:12px;font-weight:700;text-align:center;cursor:pointer;background:var(--bg);color:var(--tx2);font-family:var(--font);border:none;}
+.add-mode-tab.active{background:var(--g);color:#fff;}
+.qty-input-wrap{display:flex;align-items:center;gap:10px;}
+.qty-stepper{display:flex;align-items:center;gap:0;border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden;}
+.qty-stepper button{width:38px;height:38px;background:var(--bg);border:none;font-size:18px;cursor:pointer;font-family:var(--font);}
+.qty-stepper button:hover{background:#e0e0e0;}
+.qty-stepper input{width:60px;height:38px;text-align:center;border:none;border-left:1px solid var(--bdrm);border-right:1px solid var(--bdrm);font-size:16px;font-weight:700;font-family:var(--mono);}
+.qty-stepper input:focus{outline:none;}
+</style>
+</head>
+<body>
+<div id="loadingScreen">
+  <div style="width:52px;height:52px;background:#1D9E75;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;">📦</div>
+  <div style="font-size:15px;font-weight:700;">RYG Stock System</div>
+  <div class="spinner"></div>
+</div>
+<div id="mainApp">
+  <div class="topbar">
+    <div class="topbar-logo">📦</div>
+    <span class="topbar-title">RYG Stock</span>
+    <div class="user-mini">
+      <img id="uAvatar" class="user-ava" src="" onerror="this.style.display='none'" alt=""/>
+      <span id="uFallback" class="user-ava"></span>
+      <span id="uName" class="user-name-top"></span>
+      <span id="uRole" class="badge-role badge-admin"></span>
+      <button class="btn-topout" onclick="doLogout()">ออก</button>
+    </div>
+  </div>
+  <div class="nav-tabs" id="navTabs"></div>
+  <div class="content" id="mainContent"></div>
+  <nav class="bottom-nav" id="bottomNav"></nav>
+</div>
+<div id="notif"></div>
+
+<script>
+let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
+let searchQ='', expandedItem=null, openCats={}, pendingUnits=[];
+
+initShell('stock', async (user, role, firestore) => {
+  currentUser=user; currentRole=role; db=firestore;
+  await loadItems(); await loadUnits();
+  renderStock();
+});
+
+async function loadItems(){
+  const snap=await db.collection('items').orderBy('id').get();
+  allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
+}
+async function loadUnits(){
+  const snap=await db.collection('units').get();
+  allUnits=snap.docs.map(d=>({docId:d.id,...d.data()}));
+}
+const getUnitsOf=id=>allUnits.filter(u=>u.itemId===id);
+const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
+const getItemQty=id=>getAvail(id).length;
+
+function getStatus(id){
+  const q=getItemQty(id),item=allItems.find(i=>i.id===id);
+  if(!item)return'ok'; if(q<=0)return'out'; if(q<=(item.min||1))return'low'; return'ok';
+}
+function statusBadge(id){
+  const s=getStatus(id);
+  if(s==='out')return'<span class="badge badge-out">หมดสต็อก</span>';
+  if(s==='low')return'<span class="badge badge-low">ใกล้หมด</span>';
+  return'<span class="badge badge-ok">ปกติ</span>';
+}
+function snBadge(u){ return u.sn?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
+function unitStatBadge(s){
+  if(s==='used')return'<span class="badge badge-used2">เบิกแล้ว</span>';
+  if(s==='damaged')return'<span class="badge badge-dmg">ชำรุด</span>';
+  return'<span class="badge badge-avail">พร้อมใช้</span>';
+}
+
+// ─── RENDER STOCK ───
+function renderStock(){
+  const isAdmin=currentRole==='admin';
+  const q=searchQ.toLowerCase();
+  const filtered=allItems.filter(i=>!q||i.name.toLowerCase().includes(q)||i.id.toLowerCase().includes(q)||(i.cat||'').toLowerCase().includes(q));
+  const grouped={};
+  filtered.forEach(item=>{const k=getGroupKey(item.cat);if(!grouped[k])grouped[k]=[];grouped[k].push(item);});
+  if(q)Object.keys(grouped).forEach(k=>openCats[k]=true);
+
+  let html=`
+  <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:700">📦 สต็อกสินค้า</div>
+    <div class="search-bar">
+      <input class="search-input" placeholder="ค้นหา..." value="${searchQ}" oninput="searchQ=this.value;renderStock()"/>
+      ${isAdmin?`<button class="btn btn-primary btn-sm" onclick="openAddItem()">+ ประเภทใหม่</button>`:''}
+    </div>
+  </div>`;
+
+  CAT_GROUPS.forEach(grp=>{
+    const items=grouped[grp.key]; if(!items||!items.length)return;
+    const isOpen=openCats[grp.key]!==false;
+    const totalQty=items.reduce((a,i)=>a+getItemQty(i.id),0);
+    const outCnt=items.filter(i=>getStatus(i.id)==='out').length;
+    const lowCnt=items.filter(i=>getStatus(i.id)==='low').length;
+    html+=`
+    <div class="cat-group">
+      <div class="cat-header ${isOpen?'open':''}" onclick="toggleCat('${grp.key}')">
+        <span class="cat-icon">${grp.icon}</span>
+        <span class="cat-name">${grp.label}</span>
+        <div class="cat-counts">
+          <span class="cat-count">${items.length} รายการ · ${totalQty} ชิ้น</span>
+          ${outCnt?`<span class="badge badge-out">${outCnt} หมด</span>`:''}
+          ${lowCnt?`<span class="badge badge-low">${lowCnt} ใกล้หมด</span>`:''}
+        </div>
+        <span class="cat-arrow">▼</span>
+      </div>
+      <div class="cat-body ${isOpen?'open':''}" id="catbody-${grp.key}">
+        ${items.map(item=>renderItemRow(item,isAdmin)).join('')}
+      </div>
+    </div>`;
+  });
+  if(!filtered.length) html+=`<div class="empty-state">ไม่พบสินค้าที่ค้นหา</div>`;
+  document.getElementById('mainContent').innerHTML=html;
+}
+
+function renderItemRow(item, isAdmin){
+  const units=getUnitsOf(item.id);
+  const qty=getItemQty(item.id);
+  const isExp=expandedItem===item.id;
+  return`
+  <div>
+    <div class="item-row ${isExp?'expanded':''}" onclick="toggleExpand('${item.id}')">
+      <div style="min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span style="font-size:12px;color:var(--tx3);transition:transform .15s;${isExp?'transform:rotate(90deg)':''};display:inline-block">▸</span>
+          <span class="item-name">${item.name}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="item-code">${item.id}</span>
+          ${statusBadge(item.id)}
+        </div>
+      </div>
+      <div class="item-right">
+        <div class="qty-pill">${qty}<span class="fz11 txmute"> ชิ้น</span></div>
+        ${isAdmin?`<div class="flex gap8" onclick="event.stopPropagation()">
+          <button class="btn btn-icon btn-sm" onclick="openEditItem('${item.id}')" title="แก้ไข">✏️</button>
+          <button class="btn btn-icon btn-sm btn-primary" onclick="openAddUnits('${item.id}')" title="เพิ่มสต็อก">+📦</button>
+        </div>`:''}
+      </div>
+    </div>
+    <div class="item-expand ${isExp?'open':''}" id="expand-${item.id}">
+      <div class="flex jb items-c" style="margin-bottom:8px">
+        <span class="fz12 fw7">${units.length} ชิ้นทั้งหมด · พร้อมใช้: ${qty}</span>
+        ${isAdmin?`<button class="btn btn-primary btn-sm" onclick="openAddUnits('${item.id}')">+ เพิ่มสต็อก</button>`:''}
+      </div>
+      ${units.length===0?`<div class="fz12 txmute" style="padding:6px 0">ยังไม่มีชิ้นส่วนในระบบ</div>`:`
+      <div class="units-grid">
+        ${units.map(u=>`
+          <div class="unit-card">
+            <div class="unit-dot dot-${u.status||'available'}"></div>
+            <div class="unit-info">
+              ${snBadge(u)} ${unitStatBadge(u.status||'available')}
+              ${u.detail?`<div class="unit-detail">${u.detail}</div>`:''}
+              ${u.note?`<div class="unit-note">📝 ${u.note}</div>`:''}
+              ${u.status==='used'&&u.usedAtLabel?`<div class="unit-loc">📍 ${u.usedAtLabel}</div>`:''}
+            </div>
+            ${isAdmin?`<div class="unit-actions">
+              <button class="btn btn-icon btn-sm" onclick="openEditUnit('${u.docId}')">✏️</button>
+              ${u.status==='available'?`<button class="btn btn-icon btn-sm btn-danger" onclick="markDamaged('${u.docId}')">🔧</button>`:''}
+            </div>`:''}
+          </div>`).join('')}
+      </div>`}
+    </div>
+  </div>`;
+}
+
+function toggleCat(key){ openCats[key]=(openCats[key]===false)?true:false; renderStock(); }
+function toggleExpand(id){ expandedItem=expandedItem===id?null:id; renderStock(); }
+
+// ─── ADD UNITS MODAL ───
+// Mode: 'qty' (จำนวนเท่านั้น) or 'sn' (ระบุ S/N)
+let addMode='qty';
+
+function openAddUnits(itemId){
+  const item=allItems.find(i=>i.id===itemId);
+  addMode='qty'; pendingUnits=[{sn:'',detail:'',note:''}];
+  renderAddUnitsModal(item);
+}
+
+function renderAddUnitsModal(item){
+  const itemId=item.id;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">📦 เพิ่มสต็อก — ${item.name}</div>
+    <div class="add-mode-tabs">
+      <button class="add-mode-tab ${addMode==='qty'?'active':''}" onclick="setAddMode('qty','${itemId}')">⚡ เพิ่มจำนวน</button>
+      <button class="add-mode-tab ${addMode==='sn'?'active':''}" onclick="setAddMode('sn','${itemId}')">🔢 ระบุ S/N</button>
+    </div>
+    <div id="addModeBody">${addMode==='qty'?renderQtyMode(itemId):renderSNMode(itemId)}</div>
+  `, true);
+}
+
+function renderQtyMode(itemId){
+  return`
+    <div class="info-box">💡 ระบบจะสร้างรายการโดยใส่ S/N เป็น "-" ไว้ก่อน สามารถแก้ไขภายหลังได้</div>
+    <div class="field">
+      <label>จำนวนที่เพิ่ม</label>
+      <div class="qty-stepper">
+        <button onclick="adjustQty(-1)">−</button>
+        <input type="number" id="qtyVal" value="1" min="1" max="999" oninput="this.value=Math.max(1,parseInt(this.value)||1)"/>
+        <button onclick="adjustQty(1)">+</button>
+      </div>
+    </div>
+    <div class="field"><label>รายละเอียด (ไม่บังคับ)</label><input id="qtyDetail" placeholder="เช่น 2TB SATA, Seagate"/></div>
+    <div class="field"><label>หมายเหตุ</label><input id="qtyNote" placeholder="หมายเหตุเพิ่มเติม"/></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doSaveQty('${itemId}')">💾 บันทึก</button>
+    </div>`;
+}
+
+function renderSNMode(itemId){
+  return`
+    <div style="display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;margin-bottom:4px;font-size:10px;font-weight:700;color:var(--tx3);padding:0 2px">
+      <span>S/N</span><span>รายละเอียด</span><span>หมายเหตุ</span><span></span>
+    </div>
+    <div id="pendingList">
+      ${pendingUnits.map((u,i)=>snRowHTML(u,i,itemId)).join('')}
+    </div>
+    <button class="btn btn-sm" style="margin-top:8px" onclick="addPendingRow('${itemId}')">+ เพิ่มแถว</button>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" id="savePendingBtn" onclick="doSaveUnits('${itemId}')">💾 บันทึก ${pendingUnits.length} ชิ้น</button>
+    </div>`;
+}
+
+function setAddMode(mode, itemId){
+  addMode=mode;
+  document.getElementById('addModeBody').innerHTML = mode==='qty' ? renderQtyMode(itemId) : renderSNMode(itemId);
+}
+function adjustQty(d){
+  const el=document.getElementById('qtyVal'); if(!el)return;
+  el.value=Math.max(1,(parseInt(el.value)||1)+d);
+}
+
+async function doSaveQty(itemId){
+  const item=allItems.find(i=>i.id===itemId);
+  const qty=Math.max(1,parseInt(document.getElementById('qtyVal')?.value)||1);
+  const detail=document.getElementById('qtyDetail')?.value.trim()||'';
+  const note=document.getElementById('qtyNote')?.value.trim()||'';
+  const batch=db.batch();
+  for(let i=0;i<qty;i++){
+    batch.set(db.collection('units').doc(),{
+      itemId, sn:'-', detail, note, status:'available',
+      addedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      addedBy:currentUser.displayName, addedByUid:currentUser.uid
+    });
+  }
+  batch.set(db.collection('transactions').doc(),{
+    type:'in', itemId, itemName:item.name, qty, sn:'-',
+    userId:currentUser.uid, userEmail:currentUser.email, userName:currentUser.displayName,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(), source:'manual_qty'
+  });
+  await batch.commit();
+  const snap=await db.collection('units').where('itemId','==',itemId).get();
+  allUnits=allUnits.filter(u=>u.itemId!==itemId).concat(snap.docs.map(d=>({docId:d.id,...d.data()})));
+  closeModal(); showNotif(`เพิ่ม ${qty} ชิ้นสำเร็จ`); renderStock();
+}
+
+function snRowHTML(u,i,itemId){
+  return`<div class="sn-row" id="srow-${i}" style="display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center">
+    <input placeholder="S/N" value="${u.sn||''}" style="padding:7px 9px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--mono);width:100%" oninput="pendingUnits[${i}].sn=this.value"/>
+    <input placeholder="รายละเอียด" value="${u.detail||''}" style="padding:7px 9px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--font);width:100%" oninput="pendingUnits[${i}].detail=this.value"/>
+    <input placeholder="หมายเหตุ" value="${u.note||''}" style="padding:7px 9px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--font);width:100%" oninput="pendingUnits[${i}].note=this.value"/>
+    <button class="btn btn-icon btn-sm btn-danger" onclick="removePendingRow(${i})">✕</button>
+  </div>`;
+}
+function addPendingRow(itemId){
+  pendingUnits.push({sn:'',detail:'',note:''});
+  document.getElementById('pendingList').innerHTML=pendingUnits.map((u,i)=>snRowHTML(u,i,itemId)).join('');
+  const b=document.getElementById('savePendingBtn');
+  if(b)b.textContent=`💾 บันทึก ${pendingUnits.length} ชิ้น`;
+}
+function removePendingRow(idx){
+  if(pendingUnits.length===1){showNotif('ต้องมีอย่างน้อย 1 แถว','error');return;}
+  pendingUnits.splice(idx,1);
+  document.getElementById('pendingList').innerHTML=pendingUnits.map((u,i)=>snRowHTML(u,i,'_')).join('');
+}
+async function doSaveUnits(itemId){
+  const item=allItems.find(i=>i.id===itemId);
+  pendingUnits.forEach((u,i)=>{
+    const row=document.getElementById(`srow-${i}`);
+    if(row){const inp=row.querySelectorAll('input');u.sn=inp[0].value.trim()||'-';u.detail=inp[1].value.trim();u.note=inp[2].value.trim();}
+  });
+  const batch=db.batch();
+  pendingUnits.forEach(u=>{
+    batch.set(db.collection('units').doc(),{
+      itemId,sn:u.sn,detail:u.detail,note:u.note,status:'available',
+      addedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      addedBy:currentUser.displayName,addedByUid:currentUser.uid
+    });
+  });
+  batch.set(db.collection('transactions').doc(),{
+    type:'in',itemId,itemName:item.name,qty:pendingUnits.length,
+    sn:pendingUnits.map(u=>u.sn).join(', '),
+    userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),source:'manual_sn'
+  });
+  await batch.commit();
+  const snap=await db.collection('units').where('itemId','==',itemId).get();
+  allUnits=allUnits.filter(u=>u.itemId!==itemId).concat(snap.docs.map(d=>({docId:d.id,...d.data()})));
+  closeModal(); showNotif(`เพิ่ม ${pendingUnits.length} ชิ้นสำเร็จ`); renderStock();
+}
+
+// ─── EDIT UNIT ───
+function openEditUnit(uid){
+  const u=allUnits.find(x=>x.docId===uid);if(!u)return;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ แก้ไขชิ้นส่วน</div>
+    <div class="field"><label>S/N</label><input id="euSN" value="${u.sn||'-'}" style="font-family:var(--mono)"/></div>
+    <div class="field"><label>รายละเอียด</label><input id="euD" value="${u.detail||''}" placeholder="สเปก, MAC, รุ่น..."/></div>
+    <div class="field"><label>หมายเหตุ</label><textarea id="euN">${u.note||''}</textarea></div>
+    <div class="field"><label>สถานะ</label>
+      <select id="euS">
+        <option value="available" ${u.status==='available'?'selected':''}>✅ พร้อมใช้</option>
+        <option value="damaged" ${u.status==='damaged'?'selected':''}>🔧 ชำรุด</option>
+        <option value="used" ${u.status==='used'?'selected':''}>📤 เบิกแล้ว</option>
+      </select></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doSaveUnit('${uid}')">บันทึก</button>
+    </div>`);
+}
+async function doSaveUnit(uid){
+  const u=allUnits.find(x=>x.docId===uid);
+  const data={sn:document.getElementById('euSN').value.trim()||'-',detail:document.getElementById('euD').value.trim(),
+    note:document.getElementById('euN').value.trim(),status:document.getElementById('euS').value};
+  await db.collection('units').doc(uid).update(data);
+  Object.assign(u,data); closeModal(); showNotif('บันทึกสำเร็จ'); renderStock();
+}
+async function markDamaged(uid){
+  if(!confirm('ทำเครื่องหมาย "ชำรุด" สำหรับชิ้นนี้?'))return;
+  await db.collection('units').doc(uid).update({status:'damaged'});
+  const u=allUnits.find(x=>x.docId===uid);if(u)u.status='damaged';
+  showNotif('อัปเดตสถานะแล้ว'); renderStock();
+}
+
+// ─── ADD/EDIT ITEM TYPE ───
+function openAddItem(){
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">+ เพิ่มประเภทสินค้า</div>
+    <div class="grid-2">
+      <div class="field"><label>รหัสสินค้า *</label><input id="mId" placeholder="SP050"/></div>
+      <div class="field"><label>หมวดหมู่</label>
+        <select id="mCat">${['Storage','Memory','Component','Network','Cable','Power','Device','Camera','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>ชื่อสินค้า *</label><input id="mName"/></div>
+    <div class="grid-2">
+      <div class="field"><label>จำนวนขั้นต่ำ</label><input id="mMin" type="number" value="1" min="0"/></div>
+      <div class="field"><label>สถานที่</label><input id="mLoc" value="ชั้น IT"/></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doAddItem()">บันทึก</button>
+    </div>`);
+}
+async function doAddItem(){
+  const id=document.getElementById('mId').value.trim().toUpperCase();
+  const name=document.getElementById('mName').value.trim();
+  if(!id||!name){showNotif('กรุณากรอกให้ครบ','error');return;}
+  if(allItems.find(i=>i.id===id)){showNotif('รหัสซ้ำ!','error');return;}
+  const data={id,name,cat:document.getElementById('mCat').value,
+    min:parseInt(document.getElementById('mMin').value)||1,loc:document.getElementById('mLoc').value};
+  await db.collection('items').doc(id).set(data);
+  allItems.push({docId:id,...data}); allItems.sort((a,b)=>a.id.localeCompare(b.id));
+  closeModal(); showNotif('เพิ่มสำเร็จ'); renderStock();
+}
+function openEditItem(id){
+  const item=allItems.find(i=>i.id===id);
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ แก้ไข — ${item.name}</div>
+    <div class="field"><label>ชื่อสินค้า</label><input id="eName" value="${item.name}"/></div>
+    <div class="grid-2">
+      <div class="field"><label>หมวดหมู่</label>
+        <select id="eCat">${['Storage','Memory','Component','Network','Cable','Power','Device','Camera','Other'].map(c=>`<option ${item.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>สถานที่</label><input id="eLoc" value="${item.loc}"/></div>
+    </div>
+    <div class="field"><label>จำนวนขั้นต่ำ</label><input id="eMin" type="number" value="${item.min}" min="0"/></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doEditItem('${id}')">บันทึก</button>
+    </div>`);
+}
+async function doEditItem(id){
+  const item=allItems.find(i=>i.id===id);
+  const data={name:document.getElementById('eName').value,cat:document.getElementById('eCat').value,
+    loc:document.getElementById('eLoc').value,min:parseInt(document.getElementById('eMin').value)||1};
+  await db.collection('items').doc(id).update(data);
+  Object.assign(item,data); closeModal(); showNotif('บันทึกสำเร็จ'); renderStock();
+}
+</script>
+</body>
+</html>

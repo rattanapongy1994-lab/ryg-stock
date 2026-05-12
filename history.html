@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>RYG Stock — ประวัติ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body>
+<div id="loadingScreen">
+  <div style="width:52px;height:52px;background:#1D9E75;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;">📦</div>
+  <div style="font-size:15px;font-weight:700;">RYG Stock System</div>
+  <div class="spinner"></div>
+</div>
+<div id="mainApp">
+  <div class="topbar">
+    <div class="topbar-logo">📦</div>
+    <span class="topbar-title">RYG Stock</span>
+    <div class="user-mini">
+      <img id="uAvatar" class="user-ava" src="" onerror="this.style.display='none'" alt=""/>
+      <span id="uFallback" class="user-ava"></span>
+      <span id="uName" class="user-name-top"></span>
+      <span id="uRole" class="badge-role badge-admin"></span>
+      <button class="btn-topout" onclick="doLogout()">ออก</button>
+    </div>
+  </div>
+  <div class="nav-tabs" id="navTabs"></div>
+  <div class="content" id="mainContent"></div>
+  <nav class="bottom-nav" id="bottomNav"></nav>
+</div>
+<div id="notif"></div>
+
+<script>
+let currentUser=null, currentRole='user', db=null;
+let historyData=[], filterType='all', searchQ='';
+
+initShell('history', (user, role, firestore) => {
+  currentUser=user; currentRole=role; db=firestore;
+  subscribeHistory();
+});
+
+function subscribeHistory(){
+  let q=db.collection('transactions').orderBy('createdAt','desc').limit(300);
+  if(currentRole!=='admin') q=q.where('userId','==',currentUser.uid);
+  q.onSnapshot(snap=>{
+    historyData=snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderHistory();
+  });
+}
+
+function renderHistory(){
+  let data=historyData;
+  if(filterType!=='all') data=data.filter(h=>h.type===filterType);
+  if(searchQ){
+    const q=searchQ.toLowerCase();
+    data=data.filter(h=>(h.itemName||'').toLowerCase().includes(q)||(h.sn||'').toLowerCase().includes(q)||(h.serviceNo||'').toLowerCase().includes(q)||(h.usedAt||'').toLowerCase().includes(q));
+  }
+
+  document.getElementById('mainContent').innerHTML=`
+  <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px">
+    <span style="font-size:15px;font-weight:700">🕐 ประวัติ${currentRole==='user'?' (ของฉัน)':''}</span>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:0;border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden">
+        ${['all','in','out'].map(t=>`
+          <button style="padding:6px 12px;border:none;background:${filterType===t?'var(--g)':'var(--bg)'};color:${filterType===t?'#fff':'var(--tx2)'};cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font)"
+            onclick="filterType='${t}';renderHistory()">
+            ${{all:'ทั้งหมด',in:'📥 นำเข้า',out:'📤 เบิก'}[t]}
+          </button>`).join('')}
+      </div>
+      <input class="search-input" style="min-width:140px;max-width:200px" placeholder="ค้นหา..." value="${searchQ}"
+        oninput="searchQ=this.value;renderHistory()"/>
+    </div>
+  </div>
+  <div class="fz12 txmute" style="margin-bottom:.7rem">${data.length} รายการ</div>
+  ${data.length===0?`<div class="empty-state">ยังไม่มีรายการ</div>`:`
+  <div class="hist-list">
+    ${data.map(h=>`
+      <div class="hist-card">
+        <div class="hist-top">
+          <div class="hist-dot" style="background:${h.type==='in'?'#1D9E75':'#E24B4A'}"></div>
+          <span class="hist-item">${h.itemName}</span>
+          ${h.type==='in'?'<span class="badge badge-in">📥 นำเข้า</span>':'<span class="badge badge-out2">📤 เบิก</span>'}
+        </div>
+        ${h.sn&&h.sn!=='-'?`<div class="hist-sn">S/N: ${h.sn}</div>`:''}
+        <div class="hist-meta">
+          ${h.usedAt?`📍 ${h.usedAt} · `:''}
+          ${h.hasService==='yes'?'✅ ใบ Service ':h.hasService==='job'?'📋 Job Order ':''}
+          ${h.serviceRef?`<span class="hist-ref">${h.serviceRef}</span> · `:''}
+          ${h.dept?h.dept+' · ':''}
+          ${currentRole==='admin'&&h.userName?h.userName+' · ':''}
+          ${formatDT(h.createdAt)}
+        </div>
+        ${h.serviceNo?`<div class="hist-ref" style="margin-top:3px">${h.serviceNo}</div>`:''}
+      </div>`).join('')}
+  </div>`}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>RYG Stock — ผู้ใช้</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body>
+<div id="loadingScreen">
+  <div style="width:52px;height:52px;background:#1D9E75;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;">📦</div>
+  <div style="font-size:15px;font-weight:700;">RYG Stock System</div>
+  <div class="spinner"></div>
+</div>
+<div id="mainApp">
+  <div class="topbar">
+    <div class="topbar-logo">📦</div>
+    <span class="topbar-title">RYG Stock</span>
+    <div class="user-mini">
+      <img id="uAvatar" class="user-ava" src="" onerror="this.style.display='none'" alt=""/>
+      <span id="uFallback" class="user-ava"></span>
+      <span id="uName" class="user-name-top"></span>
+      <span id="uRole" class="badge-role badge-admin"></span>
+      <button class="btn-topout" onclick="doLogout()">ออก</button>
+    </div>
+  </div>
+  <div class="nav-tabs" id="navTabs"></div>
+  <div class="content" id="mainContent"></div>
+  <nav class="bottom-nav" id="bottomNav"></nav>
+</div>
+<div id="notif"></div>
+
+<script>
+let currentUser=null, currentRole='user', db=null, allUsers=[];
+
+initShell('users', async (user, role, firestore) => {
+  currentUser=user; currentRole=role; db=firestore;
+  if(role!=='admin'){ window.location.href='index.html'; return; }
+  await loadUsers();
+  renderUsers();
+});
+
+async function loadUsers(){
+  document.getElementById('mainContent').innerHTML=`
+  <div class="flex jb items-c section-gap">
+    <span style="font-size:15px;font-weight:700">👥 จัดการผู้ใช้</span>
+    <span class="fz12 txmute">เปลี่ยนสิทธิ์มีผลเมื่อล็อกอินใหม่</span>
+  </div>
+  <div class="card" id="usersCard"><div class="empty-state">กำลังโหลด...</div></div>`;
+  try{
+    const snap=await db.collection('users').orderBy('createdAt','desc').get();
+    allUsers=snap.docs.map(d=>({docId:d.id,...d.data()}));
+  }catch(e){
+    document.getElementById('usersCard').innerHTML=`<div class="empty-state" style="color:var(--r)">โหลดไม่สำเร็จ: ${e.message}</div>`;
+  }
+}
+
+function renderUsers(){
+  document.getElementById('mainContent').innerHTML=`
+  <div class="flex jb items-c section-gap">
+    <span style="font-size:15px;font-weight:700">👥 จัดการผู้ใช้</span>
+    <span class="fz12 txmute">เปลี่ยนสิทธิ์มีผลเมื่อล็อกอินใหม่</span>
+  </div>
+  <div class="card" id="usersCard">
+    <div style="padding:.5rem 0">
+      ${allUsers.map(u=>{
+        const isMe=u.docId===currentUser?.uid;
+        const init=(u.displayName||u.email||'U')[0].toUpperCase();
+        return`<div style="display:flex;align-items:center;gap:10px;padding:.7rem 1rem;border-bottom:1px solid var(--bdr)${isMe?';background:#FFFDE7':''}">
+          ${u.photoURL?`<img src="${u.photoURL}" class="user-ava" style="width:34px;height:34px" onerror="this.style.display='none'"/>`
+            :`<div class="user-ava" style="width:34px;height:34px;font-size:13px">${init}</div>`}
+          <div style="flex:1;min-width:0">
+            <div class="fw7 fz12">${u.displayName||'(ไม่มีชื่อ)'}${isMe?' <span class="badge badge-ok">คุณ</span>':''}</div>
+            <div class="fz11 txmute" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email||''}</div>
+          </div>
+          ${isMe?`<span class="badge ${u.role==='admin'?'badge-admin':'badge-user'}">${u.role==='admin'?'🔑 Admin':'👤 User'}</span>`:`
+          <select style="padding:5px 8px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--font);background:var(--surf);cursor:pointer"
+            onchange="changeRole('${u.docId}',this.value,this)">
+            <option value="user" ${u.role!=='admin'?'selected':''}>👤 User</option>
+            <option value="admin" ${u.role==='admin'?'selected':''}>🔑 Admin</option>
+          </select>`}
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="padding:.6rem 1rem;background:#FAFAFA;border-top:1px solid var(--bdr);font-size:11px;color:var(--tx3)">
+      ${allUsers.length} บัญชี · Admin ${allUsers.filter(u=>u.role==='admin').length} · User ${allUsers.filter(u=>u.role!=='admin').length}
+    </div>
+  </div>`;
+}
+
+async function changeRole(uid,newRole,el){
+  const user=allUsers.find(u=>u.docId===uid); if(!user)return;
+  const oldRole=user.role||'user'; if(oldRole===newRole)return;
+  if(!confirm(`เปลี่ยนสิทธิ์ "${user.displayName||user.email}" เป็น ${newRole}?`)){el.value=oldRole;return;}
+  try{
+    await db.collection('users').doc(uid).update({role:newRole});
+    user.role=newRole; showNotif('เปลี่ยนสิทธิ์สำเร็จ'); renderUsers();
+  }catch(e){showNotif('ไม่สำเร็จ: '+e.message,'error');el.value=oldRole;}
+}
+</script>
+</body>
+</html>
