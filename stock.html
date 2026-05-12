@@ -88,6 +88,30 @@
 <div id="notif"></div>
 
 <script>
+// ── Fallback: เผื่อ shared.js บน server เป็นเวอร์ชันเก่าที่ไม่มี GROUP_MAP / CAT_GROUPS ──
+if(typeof GROUP_MAP === 'undefined'){
+  window.GROUP_MAP = {
+    Storage:   { label: 'Storage',         icon: '💾' },
+    Memory:    { label: 'Memory / RAM',    icon: '🧠' },
+    Component: { label: 'Component',       icon: '🔧' },
+    Network:   { label: 'Network',         icon: '🌐' },
+    Camera:    { label: 'Camera',          icon: '📷' },
+    Cable:     { label: 'Cable / Adapter', icon: '🔌' },
+    Power:     { label: 'Power Supply',    icon: '⚡' },
+    Device:    { label: 'Device',          icon: '🖥️' },
+    Other:     { label: 'อื่น ๆ',          icon: '📋' },
+  };
+}
+if(typeof CAT_GROUPS === 'undefined'){
+  window.CAT_GROUPS = Object.entries(GROUP_MAP).map(([k,v])=>({key:k,label:v.label,icon:v.icon}));
+}
+if(typeof getGroupKey === 'undefined'){
+  window.getGroupKey = function(cat){ return GROUP_MAP[cat] ? cat : 'Other'; };
+}
+if(typeof getGroupDef === 'undefined'){
+  window.getGroupDef = function(key){ return GROUP_MAP[key] || GROUP_MAP['Other']; };
+}
+
 let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
 let searchQ='', expandedItem=null, openCats={}, pendingUnits=[];
 let importRows=[], importMode='stock'; // 'stock' | 'units'
@@ -107,20 +131,14 @@ initShell('stock', async (user, role, firestore) => {
 });
 
 async function loadItems(){
-  try {
-    const snap=await db.collection('items').orderBy('id').get();
-    allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
-  } catch(e) {
-    // orderBy('id') อาจต้องการ index — fallback โดยไม่ orderBy แล้วเรียง client-side
-    console.warn('loadItems orderBy failed, fallback:', e.message);
-    const snap=await db.collection('items').get();
-    allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
-    allItems.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
-  }
+  // ไม่ใช้ orderBy เพื่อหลีกเลี่ยงปัญหา index — เรียง client-side แทน
+  const snap = await db.collection('items').get();
+  allItems = snap.docs.map(d=>({docId:d.id,...d.data()}));
+  allItems.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
 }
 async function loadUnits(){
-  const snap=await db.collection('units').get();
-  allUnits=snap.docs.map(d=>({docId:d.id,...d.data()}));
+  const snap = await db.collection('units').get();
+  allUnits = snap.docs.map(d=>({docId:d.id,...d.data()}));
 }
 const getUnitsOf=id=>allUnits.filter(u=>u.itemId===id);
 const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
@@ -501,29 +519,21 @@ function confirmDeleteItem(id){
       <button class="btn btn-danger" onclick="doDeleteItem('${id}')">🗑️ ยืนยันลบ</button>
     </div>`);
 }
-
 async function doDeleteItem(id){
   const item=allItems.find(i=>i.id===id); if(!item)return;
   const units=allUnits.filter(u=>u.itemId===id);
   try{
-    // ลบ units ทั้งหมดของ item นี้ (batch ละ 400)
     const CHUNK=400;
     for(let s=0;s<units.length;s+=CHUNK){
       const batch=db.batch();
       units.slice(s,s+CHUNK).forEach(u=>batch.delete(db.collection('units').doc(u.docId)));
       await batch.commit();
     }
-    // ลบ item
     await db.collection('items').doc(id).delete();
-    // อัปเดต local arrays
     allItems=allItems.filter(i=>i.id!==id);
     allUnits=allUnits.filter(u=>u.itemId!==id);
-    closeModal();
-    showNotif(`ลบ "${item.name}" สำเร็จ`);
-    renderStock();
-  }catch(e){
-    showNotif('ลบไม่สำเร็จ: '+e.message,'error');
-  }
+    closeModal(); showNotif(`ลบ "${item.name}" สำเร็จ`); renderStock();
+  }catch(e){ showNotif('ลบไม่สำเร็จ: '+e.message,'error'); }
 }
 
 // ══════════════════════════════════════════════
