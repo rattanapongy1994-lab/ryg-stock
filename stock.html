@@ -84,6 +84,26 @@
 }
 .cat-manage-btn:hover { border-color: var(--g); color: var(--g); }
 
+/* Add item button in grid — matches manage btn style but green tint */
+.cat-add-item-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 2px dashed var(--g);
+  border-radius: var(--rad);
+  background: var(--gll);
+  cursor: pointer;
+  font-family: var(--font);
+  color: var(--g);
+  font-size: 10px;
+  font-weight: 700;
+  transition: all .15s;
+}
+.cat-add-item-btn:hover { background: var(--g); color: #fff; }
+
 /* ── Add mode toggle ─────────────────────────── */
 .add-mode-tabs{display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden;}
 .add-mode-tab{flex:1;padding:9px;font-size:12px;font-weight:700;text-align:center;cursor:pointer;background:var(--bg);color:var(--tx2);font-family:var(--font);border:none;}
@@ -299,7 +319,6 @@ function isoToDMY(iso) {
 
 // ── Auto-generate next item ID ────────────────────
 function genNextItemId() {
-  // หา SP-xxx ที่มีอยู่ทั้งหมด แล้วหาเลขสูงสุด
   let max = 0;
   allItems.forEach(item => {
     const m = item.id.match(/^SP(\d+)$/i);
@@ -393,7 +412,7 @@ function renderStock() {
   );
   if (selectedCat !== '__all__') filtered = filtered.filter(i => getCatKey(i.cat) === selectedCat);
 
-  // Category grid
+  // ── Category grid ────────────────────────────────
   let catGridHTML = `<div class="cat-select-grid">`;
   const totalAvail = allUnits.filter(u=>u.status==='available').length;
   catGridHTML += `
@@ -416,21 +435,27 @@ function renderStock() {
         <span class="csb-count">${qty}</span>
       </button>`;
   });
+
+  // ── Admin action buttons ข้างท้าย grid ────────────
   if (isAdmin) {
     catGridHTML += `
-      <button class="cat-manage-btn" onclick="openManageCats()">
+      <button class="cat-add-item-btn" onclick="openAddItem()" title="เพิ่มประเภทสินค้าใหม่">
+        <span style="font-size:18px">➕</span>
+        <span>ประเภทสินค้า</span>
+      </button>
+      <button class="cat-manage-btn" onclick="openManageCats()" title="จัดการหมวดหมู่">
         <span style="font-size:18px">⚙️</span>
-        <span>จัดการ</span>
+        <span>จัดการหมวด</span>
       </button>`;
   }
   catGridHTML += `</div>`;
 
+  // ── หัวหน้า + Search bar (ไม่มีปุ่ม + แล้ว) ──────
   let html = `
   <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px;margin-bottom:.75rem">
     <div style="font-size:15px;font-weight:700">📦 สต็อกสินค้า</div>
     <div class="search-bar">
       <input class="search-input" placeholder="ค้นหา..." value="${searchQ}" oninput="searchQ=this.value;renderStock()"/>
-      ${isAdmin?`<button class="btn btn-primary btn-sm" onclick="openAddItem()">+ ประเภทใหม่</button>`:''}
     </div>
   </div>
   ${catGridHTML}`;
@@ -545,7 +570,6 @@ function renderQWModal(item, avail) {
     <div class="modal-handle"></div>
     <div class="modal-title">📤 เบิกสินค้า — ${item.name}</div>
 
-    <!-- ข้อมูลการเบิก -->
     <div class="grid-2">
       <div class="field">
         <label>ผู้เบิก</label>
@@ -572,7 +596,6 @@ function renderQWModal(item, avail) {
       <input id="qwServiceRef" placeholder="รายละเอียดงาน"/>
     </div>
 
-    <!-- วันที่เบิก -->
     <div class="field">
       <label>📅 วันที่เบิก</label>
       <div class="date-input-wrap">
@@ -589,7 +612,6 @@ function renderQWModal(item, avail) {
 
     <div class="field"><label>หมายเหตุ</label><textarea id="qwNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
 
-    <!-- เลือกชิ้น -->
     <div class="field">
       <label style="margin-bottom:6px;display:block">เลือกชิ้นที่ต้องการเบิก (${avail.length} ชิ้นพร้อมใช้)</label>
       ${avail.length > 0
@@ -606,7 +628,6 @@ function renderQWModal(item, avail) {
       </button>
     </div>`, true);
 
-  // bind dept change
   const deptSel = document.getElementById('qwDept');
   if (deptSel) deptSel.addEventListener('change', () => {
     const other = document.getElementById('qwDeptOther');
@@ -707,7 +728,6 @@ async function doQuickWithdraw(itemId) {
     });
     await batch.commit();
 
-    // อัปเดต local state
     qwSelectedUnits.forEach(uid => {
       const u = allUnits.find(x => x.docId === uid);
       if (u) { u.status = 'used'; u.usedAtLabel = usedAt; }
