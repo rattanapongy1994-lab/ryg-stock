@@ -238,6 +238,15 @@
 .qw-unit-row:hover { border-color: var(--g); background: var(--gll); }
 .qw-unit-row input[type="checkbox"] { accent-color: var(--g); width: 15px; height: 15px; flex-shrink: 0; }
 .qw-unit-row.selected { border-color: var(--g); background: var(--gll); }
+
+/* ── Service No field ────────────────────────── */
+.service-no-wrap {
+  display: none;
+  margin-top: 6px;
+}
+.service-no-wrap.show {
+  display: block;
+}
 </style>
 </head>
 <body>
@@ -450,7 +459,7 @@ function renderStock() {
   }
   catGridHTML += `</div>`;
 
-  // ── หัวหน้า + Search bar (ไม่มีปุ่ม + แล้ว) ──────
+  // ── หัวหน้า + Search bar ──────
   let html = `
   <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px;margin-bottom:.75rem">
     <div style="font-size:15px;font-weight:700">📦 สต็อกสินค้า</div>
@@ -507,7 +516,6 @@ function renderItemRow(item, isAdmin){
       <div class="item-right">
         <div class="qty-pill">${qty}<span class="fz11 txmute"> ชิ้น</span></div>
         <div class="flex gap8" onclick="event.stopPropagation()">
-          <!-- ปุ่มเบิก: ทุก role เห็น, ต้องมีของพร้อมใช้ -->
           <button class="btn-withdraw-quick" onclick="openQuickWithdraw('${item.id}')" ${qty===0?'disabled':''} title="เบิกสินค้า">📤 เบิก</button>
           ${isAdmin?`
           <button class="btn btn-icon btn-sm" onclick="openEditItem('${item.id}')" title="แก้ไข">✏️</button>
@@ -587,13 +595,27 @@ function renderQWModal(item, avail) {
         </div>
       </div>
     </div>
+
     <div class="field">
       <label>ใช้งานที่</label>
       <input id="qwUsedAt" placeholder="เช่น PC-05"/>
     </div>
+
     <div class="field">
       <label>รายละเอียดงาน</label>
       <input id="qwServiceRef" placeholder="รายละเอียดงาน"/>
+    </div>
+
+    <div class="field">
+      <label>ใบ Service</label>
+      <select id="qwHasService" onchange="qwToggleServiceNo()">
+        <option value="no">— ไม่มีใบ Service —</option>
+        <option value="yes">✅ มีใบ Service</option>
+      </select>
+      <div class="service-no-wrap" id="qwServiceNoWrap">
+        <input id="qwServiceNo" placeholder="เลขที่ใบ Service เช่น SV-2024-001"
+          style="font-family:var(--mono);margin-top:6px"/>
+      </div>
     </div>
 
     <div class="field">
@@ -628,11 +650,26 @@ function renderQWModal(item, avail) {
       </button>
     </div>`, true);
 
+  // dept "อื่นๆ" toggle
   const deptSel = document.getElementById('qwDept');
   if (deptSel) deptSel.addEventListener('change', () => {
     const other = document.getElementById('qwDeptOther');
     if (other) other.style.display = deptSel.value === '__other__' ? 'block' : 'none';
   });
+}
+
+// ── Toggle service number field ───────────────────
+function qwToggleServiceNo() {
+  const sel  = document.getElementById('qwHasService');
+  const wrap = document.getElementById('qwServiceNoWrap');
+  if (!sel || !wrap) return;
+  if (sel.value === 'yes') {
+    wrap.classList.add('show');
+  } else {
+    wrap.classList.remove('show');
+    const inp = document.getElementById('qwServiceNo');
+    if (inp) inp.value = '';
+  }
 }
 
 function qwToggleUnit(docId, checked) {
@@ -680,15 +717,18 @@ function qwGetDept() {
 
 async function doQuickWithdraw(itemId) {
   if (!qwSelectedUnits.length) { showNotif('เลือกชิ้นส่วนก่อน', 'error'); return; }
-  const item = allItems.find(i => i.id === itemId);
-  const withdrawDate = document.getElementById('qwDateHidden')?.value || qwDate;
-  const reqBy        = document.getElementById('qwReqBy')?.value || '';
-  const dept         = qwGetDept();
-  const usedAt       = document.getElementById('qwUsedAt')?.value || '';
-  const serviceRef   = document.getElementById('qwServiceRef')?.value || '';
-  const note         = document.getElementById('qwNote')?.value || '';
-  const serviceNo    = genNo();
-  const txDate       = new Date(withdrawDate + 'T00:00:00');
+  const item        = allItems.find(i => i.id === itemId);
+  const withdrawDate= document.getElementById('qwDateHidden')?.value || qwDate;
+  const reqBy       = document.getElementById('qwReqBy')?.value || '';
+  const dept        = qwGetDept();
+  const usedAt      = document.getElementById('qwUsedAt')?.value || '';
+  const serviceRef  = document.getElementById('qwServiceRef')?.value || '';
+  const hasService  = document.getElementById('qwHasService')?.value || 'no';
+  const serviceNo   = hasService === 'yes'
+                        ? (document.getElementById('qwServiceNo')?.value?.trim() || '') : '';
+  const note        = document.getElementById('qwNote')?.value || '';
+  const txNo        = genNo();
+  const txDate      = new Date(withdrawDate + 'T00:00:00');
 
   const btn = document.getElementById('qwConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'กำลังเบิก...'; }
@@ -700,23 +740,24 @@ async function doQuickWithdraw(itemId) {
       batch.update(db.collection('units').doc(unitDocId), {
         status: 'used',
         usedAtLabel: usedAt,
-        usedTxId: serviceNo,
+        usedTxId: txNo,
         usedAt: firebase.firestore.Timestamp.fromDate(txDate),
         usedBy: currentUser.displayName,
       });
       batch.set(db.collection('transactions').doc(), {
         type: 'out',
-        serviceNo,
+        serviceNo: txNo,
         itemId,
         itemName: item.name,
         qty: 1,
         sn: u?.sn || '-',
         unitId: unitDocId,
         detail: u?.detail || '',
-        usedAt: usedAt,
+        usedAt,
         dept,
         reqBy,
-        hasService: 'no',
+        hasService,
+        serviceNo,
         serviceRef,
         note,
         withdrawDate,
