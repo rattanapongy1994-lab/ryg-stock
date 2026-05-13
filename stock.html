@@ -62,7 +62,6 @@
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--am);
 }
-/* All button */
 .cat-select-btn.cat-all { border-style: dashed; }
 
 /* Manage cats button */
@@ -158,6 +157,67 @@
 .import-summary.err{background:var(--rl);border-color:#F0A0A0;color:var(--r);}
 .progress-bar{height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin:.5rem 0;}
 .progress-fill{height:100%;background:var(--g);border-radius:3px;transition:width .3s;}
+
+/* ── Quick-Withdraw button ───────────────────── */
+.btn-withdraw-quick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font);
+  background: var(--g);
+  color: #fff;
+  border: none;
+  border-radius: var(--radsm, 6px);
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-withdraw-quick:hover { background: var(--gd, #15805e); }
+.btn-withdraw-quick:disabled { background: #ccc; cursor: not-allowed; }
+
+/* Date picker styling (quick-withdraw modal) */
+.date-input-wrap { position: relative; }
+.date-input-wrap input[type="date"] {
+  opacity: 0; position: absolute; width: 0; height: 0; pointer-events: none;
+}
+.date-input-wrap input[type="text"] {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--bdrm);
+  border-radius: var(--rad);
+  font-size: 13px;
+  font-family: var(--font);
+  background: var(--surf);
+  color: var(--tx1);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.date-input-wrap input[type="text"]:focus { outline: none; border-color: var(--g); }
+.date-quick { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+.date-quick-btn {
+  padding: 4px 10px; font-size: 11px; font-weight: 600;
+  border: 1px solid var(--bdrm); border-radius: 20px;
+  background: var(--bg); color: var(--tx2);
+  cursor: pointer; font-family: var(--font); transition: all .15s;
+}
+.date-quick-btn:hover, .date-quick-btn.active { background: var(--g); color: #fff; border-color: var(--g); }
+
+/* unit picker inside quick-withdraw modal */
+.qw-unit-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.qw-unit-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--bdrm);
+  border-radius: var(--rad);
+  cursor: pointer;
+  transition: all .15s;
+  font-size: 12px;
+}
+.qw-unit-row:hover { border-color: var(--g); background: var(--gll); }
+.qw-unit-row input[type="checkbox"] { accent-color: var(--g); width: 15px; height: 15px; flex-shrink: 0; }
+.qw-unit-row.selected { border-color: var(--g); background: var(--gll); }
 </style>
 </head>
 <body>
@@ -207,7 +267,6 @@ const DEFAULT_CATS = [
   { key:'Other',     label:'อื่น ๆ',          icon:'📋' },
 ];
 
-// ── Fallback globals ─────────────────────────────
 if(typeof GROUP_MAP==='undefined') window.GROUP_MAP={};
 if(typeof getGroupKey==='undefined') window.getGroupKey=k=>k;
 if(typeof getGroupDef==='undefined') window.getGroupDef=k=>({label:k,icon:'📋'});
@@ -217,13 +276,38 @@ let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
 let searchQ='', expandedItem=null, selectedCat='__all__';
 let pendingUnits=[], importRows=[], importMode='stock';
 let addMode='qty';
-
-// Dynamic categories loaded from Firestore (or default)
 let catGroups = [...DEFAULT_CATS];
+
+// Quick-withdraw state
+let qwDate = todayISO();
+let qwSelectedUnits = [];
 
 const EMOJI_OPTIONS = ['💾','🧠','🔧','🌐','📷','🔌','⚡','🖥️','📋','🖱️','⌨️','🖨️',
   '📱','💻','🔋','📡','🔩','🪛','🛠️','🗂️','📁','📂','💡','🔦','📟','🧰','🗜️','📲',
   '🎮','🖲️','💿','📀','📼','📺','📻','🔬','🔭','🧲','🪝','🔐','🔑','🗝️','🔒'];
+
+// ── Helpers ──────────────────────────────────────
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function isoToDMY(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+// ── Auto-generate next item ID ────────────────────
+function genNextItemId() {
+  // หา SP-xxx ที่มีอยู่ทั้งหมด แล้วหาเลขสูงสุด
+  let max = 0;
+  allItems.forEach(item => {
+    const m = item.id.match(/^SP(\d+)$/i);
+    if (m) max = Math.max(max, parseInt(m[1]));
+  });
+  const next = max + 1;
+  return `SP${String(next).padStart(3, '0')}`;
+}
 
 // ── Init ─────────────────────────────────────────
 initShell('stock', async (user, role, firestore) => {
@@ -242,22 +326,18 @@ initShell('stock', async (user, role, firestore) => {
   renderStock();
 });
 
-// ── Load categories from Firestore ───────────────
 async function loadCats() {
   try {
     const snap = await db.collection('categories').orderBy('order').get();
     if (!snap.empty) {
       catGroups = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     } else {
-      // First time: seed defaults
       await seedDefaultCats();
     }
   } catch(e) {
-    // Firestore might not have 'categories' collection yet
     catGroups = [...DEFAULT_CATS];
   }
 }
-
 async function seedDefaultCats() {
   const batch = db.batch();
   DEFAULT_CATS.forEach((c, i) => {
@@ -266,7 +346,6 @@ async function seedDefaultCats() {
   await batch.commit();
   catGroups = DEFAULT_CATS.map((c,i) => ({ docId: c.key, ...c, order: i }));
 }
-
 async function loadItems() {
   const snap = await db.collection('items').get();
   allItems = snap.docs.map(d=>({docId:d.id,...d.data()}));
@@ -297,8 +376,6 @@ function unitStatBadge(s){
   if(s==='damaged')return'<span class="badge badge-dmg">ชำรุด</span>';
   return'<span class="badge badge-avail">พร้อมใช้</span>';
 }
-
-// ── Helper: get cat key for an item ──────────────
 function getCatKey(cat) {
   if (!cat) return 'Other';
   return catGroups.find(c => c.key === cat) ? cat : 'Other';
@@ -311,17 +388,13 @@ function getCatDef(key) {
 function renderStock() {
   const isAdmin = currentRole === 'admin';
   const q = searchQ.toLowerCase();
-
-  // Items in selected category (or all)
   let filtered = allItems.filter(i =>
     !q || i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || (i.cat||'').toLowerCase().includes(q)
   );
   if (selectedCat !== '__all__') filtered = filtered.filter(i => getCatKey(i.cat) === selectedCat);
 
-  // ── Category grid ─────────────────────────────
+  // Category grid
   let catGridHTML = `<div class="cat-select-grid">`;
-
-  // "ทั้งหมด" button
   const totalAvail = allUnits.filter(u=>u.status==='available').length;
   catGridHTML += `
     <button class="cat-select-btn cat-all${selectedCat==='__all__'?' active':''}" onclick="selectCat('__all__')">
@@ -329,7 +402,6 @@ function renderStock() {
       <span class="csb-name">ทั้งหมด</span>
       <span class="csb-count">${totalAvail}</span>
     </button>`;
-
   catGroups.forEach(grp => {
     const items = allItems.filter(i => getCatKey(i.cat) === grp.key);
     const qty = items.reduce((a,i) => a+getItemQty(i.id), 0);
@@ -344,8 +416,6 @@ function renderStock() {
         <span class="csb-count">${qty}</span>
       </button>`;
   });
-
-  // Manage cats button (admin only)
   if (isAdmin) {
     catGridHTML += `
       <button class="cat-manage-btn" onclick="openManageCats()">
@@ -355,7 +425,6 @@ function renderStock() {
   }
   catGridHTML += `</div>`;
 
-  // ── Top bar ───────────────────────────────────
   let html = `
   <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px;margin-bottom:.75rem">
     <div style="font-size:15px;font-weight:700">📦 สต็อกสินค้า</div>
@@ -366,7 +435,6 @@ function renderStock() {
   </div>
   ${catGridHTML}`;
 
-  // ── Import/Export bar (admin) ─────────────────
   if (isAdmin) {
     html += `
   <div class="ie-bar">
@@ -377,7 +445,6 @@ function renderStock() {
   </div>`;
   }
 
-  // ── Items list ────────────────────────────────
   if (!filtered.length) {
     html += `<div class="empty-state">ไม่พบสินค้า${selectedCat!=='__all__'?' ในหมวดนี้':''}</div>`;
   } else {
@@ -414,11 +481,14 @@ function renderItemRow(item, isAdmin){
       </div>
       <div class="item-right">
         <div class="qty-pill">${qty}<span class="fz11 txmute"> ชิ้น</span></div>
-        ${isAdmin?`<div class="flex gap8" onclick="event.stopPropagation()">
+        <div class="flex gap8" onclick="event.stopPropagation()">
+          <!-- ปุ่มเบิก: ทุก role เห็น, ต้องมีของพร้อมใช้ -->
+          <button class="btn-withdraw-quick" onclick="openQuickWithdraw('${item.id}')" ${qty===0?'disabled':''} title="เบิกสินค้า">📤 เบิก</button>
+          ${isAdmin?`
           <button class="btn btn-icon btn-sm" onclick="openEditItem('${item.id}')" title="แก้ไข">✏️</button>
           <button class="btn btn-icon btn-sm btn-primary" onclick="openAddUnits('${item.id}')" title="เพิ่มสต็อก">+📦</button>
-          <button class="btn btn-icon btn-sm btn-danger" onclick="confirmDeleteItem('${item.id}')" title="ลบ">🗑️</button>
-        </div>`:''}
+          <button class="btn btn-icon btn-sm btn-danger" onclick="confirmDeleteItem('${item.id}')" title="ลบ">🗑️</button>`:''}
+        </div>
       </div>
     </div>
     <div class="item-expand ${isExp?'open':''}" id="expand-${item.id}">
@@ -450,6 +520,210 @@ function renderItemRow(item, isAdmin){
 function toggleExpand(id){ expandedItem=expandedItem===id?null:id; renderStock(); }
 
 // ══════════════════════════════════════════════
+// ── QUICK WITHDRAW MODAL ─────────────────────
+// ══════════════════════════════════════════════
+function openQuickWithdraw(itemId) {
+  const item = allItems.find(i => i.id === itemId);
+  if (!item) return;
+  qwDate = todayISO();
+  qwSelectedUnits = [];
+  const avail = getAvail(itemId);
+  renderQWModal(item, avail);
+}
+
+function renderQWModal(item, avail) {
+  const unitRows = avail.map(u => `
+    <label class="qw-unit-row" id="qwrow-${u.docId}">
+      <input type="checkbox" value="${u.docId}"
+        onchange="qwToggleUnit('${u.docId}',this.checked)"
+        ${qwSelectedUnits.includes(u.docId)?'checked':''}/>
+      ${snBadge(u)}
+      <span class="fz12 txm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.detail||'ไม่มีรายละเอียด'}</span>
+    </label>`).join('');
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">📤 เบิกสินค้า — ${item.name}</div>
+
+    <!-- ข้อมูลการเบิก -->
+    <div class="grid-2">
+      <div class="field">
+        <label>ผู้เบิก</label>
+        <input id="qwReqBy" value="${currentUser?.displayName||''}"/>
+      </div>
+      <div class="field">
+        <label>แผนก</label>
+        <select id="qwDept">
+          <option value="">— เลือก —</option>
+          <option value="IT">IT</option>
+          <option value="__other__">อื่นๆ</option>
+        </select>
+        <div id="qwDeptOther" style="display:none;margin-top:6px">
+          <input id="qwDeptOtherInput" placeholder="ระบุแผนก..."/>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>ใช้งานที่</label>
+      <input id="qwUsedAt" placeholder="เช่น PC-05"/>
+    </div>
+    <div class="field">
+      <label>รายละเอียดงาน</label>
+      <input id="qwServiceRef" placeholder="รายละเอียดงาน"/>
+    </div>
+
+    <!-- วันที่เบิก -->
+    <div class="field">
+      <label>📅 วันที่เบิก</label>
+      <div class="date-input-wrap">
+        <input type="date" id="qwDateHidden" value="${qwDate}" onchange="qwOnDateChange()"/>
+        <input type="text" id="qwDateText" value="${isoToDMY(qwDate)}"
+          placeholder="วว/ดด/ปปปป" readonly onclick="qwOpenPicker()"/>
+        <div class="date-quick">
+          <button class="date-quick-btn active" data-qwoffset="0" onclick="qwSetDate(0)">วันนี้</button>
+          <button class="date-quick-btn" data-qwoffset="-1" onclick="qwSetDate(-1)">เมื่อวาน</button>
+          <button class="date-quick-btn" data-qwoffset="-2" onclick="qwSetDate(-2)">2 วันก่อน</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field"><label>หมายเหตุ</label><textarea id="qwNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
+
+    <!-- เลือกชิ้น -->
+    <div class="field">
+      <label style="margin-bottom:6px;display:block">เลือกชิ้นที่ต้องการเบิก (${avail.length} ชิ้นพร้อมใช้)</label>
+      ${avail.length > 0
+        ? `<div class="qw-unit-list">${unitRows}</div>`
+        : `<div class="fz12" style="color:var(--r)">ไม่มีชิ้นส่วนพร้อมใช้</div>`}
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" id="qwConfirmBtn"
+        onclick="doQuickWithdraw('${item.id}')"
+        ${avail.length===0?'disabled':''}>
+        ✅ ยืนยันเบิก (<span id="qwCount">0</span> ชิ้น)
+      </button>
+    </div>`, true);
+
+  // bind dept change
+  const deptSel = document.getElementById('qwDept');
+  if (deptSel) deptSel.addEventListener('change', () => {
+    const other = document.getElementById('qwDeptOther');
+    if (other) other.style.display = deptSel.value === '__other__' ? 'block' : 'none';
+  });
+}
+
+function qwToggleUnit(docId, checked) {
+  if (checked) { if (!qwSelectedUnits.includes(docId)) qwSelectedUnits.push(docId); }
+  else { qwSelectedUnits = qwSelectedUnits.filter(x => x !== docId); }
+  const cnt = document.getElementById('qwCount');
+  if (cnt) cnt.textContent = qwSelectedUnits.length;
+  const btn = document.getElementById('qwConfirmBtn');
+  if (btn) btn.disabled = qwSelectedUnits.length === 0;
+}
+
+function qwOpenPicker() {
+  const inp = document.getElementById('qwDateHidden');
+  if (!inp) return;
+  try { inp.showPicker ? inp.showPicker() : inp.click(); } catch(e) { inp.click(); }
+}
+function qwOnDateChange() {
+  const inp = document.getElementById('qwDateHidden');
+  if (inp) {
+    qwDate = inp.value || todayISO();
+    const txt = document.getElementById('qwDateText');
+    if (txt) txt.value = isoToDMY(qwDate);
+  }
+  document.querySelectorAll('.date-quick-btn[data-qwoffset]').forEach(b => b.classList.remove('active'));
+}
+function qwSetDate(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  qwDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const inp = document.getElementById('qwDateHidden');
+  if (inp) inp.value = qwDate;
+  const txt = document.getElementById('qwDateText');
+  if (txt) txt.value = isoToDMY(qwDate);
+  document.querySelectorAll('.date-quick-btn[data-qwoffset]').forEach(b => {
+    b.classList.toggle('active', b.dataset.qwoffset === String(offset));
+  });
+}
+
+function qwGetDept() {
+  const sel = document.getElementById('qwDept');
+  if (!sel) return '';
+  if (sel.value === '__other__') return (document.getElementById('qwDeptOtherInput')?.value||'').trim();
+  return sel.value;
+}
+
+async function doQuickWithdraw(itemId) {
+  if (!qwSelectedUnits.length) { showNotif('เลือกชิ้นส่วนก่อน', 'error'); return; }
+  const item = allItems.find(i => i.id === itemId);
+  const withdrawDate = document.getElementById('qwDateHidden')?.value || qwDate;
+  const reqBy        = document.getElementById('qwReqBy')?.value || '';
+  const dept         = qwGetDept();
+  const usedAt       = document.getElementById('qwUsedAt')?.value || '';
+  const serviceRef   = document.getElementById('qwServiceRef')?.value || '';
+  const note         = document.getElementById('qwNote')?.value || '';
+  const serviceNo    = genNo();
+  const txDate       = new Date(withdrawDate + 'T00:00:00');
+
+  const btn = document.getElementById('qwConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังเบิก...'; }
+
+  try {
+    const batch = db.batch();
+    qwSelectedUnits.forEach(unitDocId => {
+      const u = allUnits.find(x => x.docId === unitDocId);
+      batch.update(db.collection('units').doc(unitDocId), {
+        status: 'used',
+        usedAtLabel: usedAt,
+        usedTxId: serviceNo,
+        usedAt: firebase.firestore.Timestamp.fromDate(txDate),
+        usedBy: currentUser.displayName,
+      });
+      batch.set(db.collection('transactions').doc(), {
+        type: 'out',
+        serviceNo,
+        itemId,
+        itemName: item.name,
+        qty: 1,
+        sn: u?.sn || '-',
+        unitId: unitDocId,
+        detail: u?.detail || '',
+        usedAt: usedAt,
+        dept,
+        reqBy,
+        hasService: 'no',
+        serviceRef,
+        note,
+        withdrawDate,
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        userName: currentUser.displayName,
+        createdAt: firebase.firestore.Timestamp.fromDate(txDate),
+      });
+    });
+    await batch.commit();
+
+    // อัปเดต local state
+    qwSelectedUnits.forEach(uid => {
+      const u = allUnits.find(x => x.docId === uid);
+      if (u) { u.status = 'used'; u.usedAtLabel = usedAt; }
+    });
+
+    closeModal();
+    showNotif(`เบิกสำเร็จ ${qwSelectedUnits.length} ชิ้น`);
+    qwSelectedUnits = [];
+    renderStock();
+  } catch(e) {
+    showNotif('เบิกไม่สำเร็จ: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '✅ ยืนยันเบิก'; }
+  }
+}
+
+// ══════════════════════════════════════════════
 // ── MANAGE CATEGORIES ────────────────────────
 // ══════════════════════════════════════════════
 let editCatKey=null, editCatIcon='📋';
@@ -457,7 +731,6 @@ let editCatKey=null, editCatIcon='📋';
 function openManageCats(){
   renderManageCatsModal();
 }
-
 function renderManageCatsModal(){
   const rows = catGroups.map((c,i) => {
     const itemCnt = allItems.filter(it=>getCatKey(it.cat)===c.key).length;
@@ -470,7 +743,6 @@ function renderManageCatsModal(){
       <button class="btn btn-icon btn-sm btn-danger" onclick="confirmDeleteCat('${c.key}')" ${itemCnt>0?'title="มีสินค้าอยู่ในหมวดนี้"':''}>🗑️</button>
     </div>`;
   }).join('');
-
   showModal(`
     <div class="modal-handle"></div>
     <div class="modal-title">⚙️ จัดการหมวดหมู่</div>
@@ -482,7 +754,6 @@ function renderManageCatsModal(){
       <button class="btn btn-primary" onclick="openAddCat()">+ เพิ่มหมวดหมู่</button>
     </div>`, true);
 }
-
 function openAddCat(){
   editCatKey=null; editCatIcon='📋';
   showModal(`
@@ -494,7 +765,6 @@ function openAddCat(){
       <button class="btn btn-primary" onclick="doSaveCat(null)">บันทึก</button>
     </div>`, true);
 }
-
 function openEditCat(key){
   editCatKey=key;
   const c=catGroups.find(x=>x.key===key)||{};
@@ -508,7 +778,6 @@ function openEditCat(key){
       <button class="btn btn-primary" onclick="doSaveCat('${key}')">บันทึก</button>
     </div>`, true);
 }
-
 function catFormHTML(key, label, icon, lockKey=false){
   return `
     <div class="field">
@@ -530,7 +799,6 @@ function catFormHTML(key, label, icon, lockKey=false){
       </div>
     </div>`;
 }
-
 function selectEmoji(e){
   editCatIcon=e;
   const prev=document.getElementById('catIconPreview');
@@ -539,30 +807,24 @@ function selectEmoji(e){
     el.classList.toggle('selected', el.textContent===e);
   });
 }
-
 async function doSaveCat(existingKey){
   const keyInput=(document.getElementById('catKey')?.value||'').trim().replace(/\s+/g,'');
   const label=(document.getElementById('catLabel')?.value||'').trim();
   const icon=editCatIcon||'📋';
   if(!keyInput||!label){showNotif('กรุณากรอกรหัสและชื่อหมวด','error');return;}
-
   if(!existingKey){
-    // New: check duplicate key
     if(catGroups.find(c=>c.key===keyInput)){showNotif('รหัสหมวดซ้ำ','error');return;}
     const order=catGroups.length;
     await db.collection('categories').doc(keyInput).set({key:keyInput,label,icon,order});
     catGroups.push({docId:keyInput,key:keyInput,label,icon,order});
   } else {
-    // Edit: update label+icon only (key stays same)
     await db.collection('categories').doc(existingKey).update({label,icon});
     const c=catGroups.find(x=>x.key===existingKey);
     if(c){c.label=label;c.icon=icon;}
   }
   showNotif('บันทึกหมวดหมู่สำเร็จ');
-  renderStock();
-  openManageCats();
+  renderStock(); openManageCats();
 }
-
 function confirmDeleteCat(key){
   const c=catGroups.find(x=>x.key===key);
   const itemCnt=allItems.filter(it=>getCatKey(it.cat)===key).length;
@@ -581,10 +843,8 @@ function confirmDeleteCat(key){
       <button class="btn btn-danger" onclick="doDeleteCat('${key}')">🗑️ ยืนยันลบ</button>
     </div>`, true);
 }
-
 async function doDeleteCat(key){
   const itemsInCat=allItems.filter(it=>getCatKey(it.cat)===key);
-  // Move items to 'Other'
   if(itemsInCat.length>0){
     const batch=db.batch();
     itemsInCat.forEach(it=>{
@@ -597,8 +857,7 @@ async function doDeleteCat(key){
   catGroups=catGroups.filter(c=>c.key!==key);
   if(selectedCat===key) selectedCat='__all__';
   showNotif('ลบหมวดหมู่สำเร็จ');
-  renderStock();
-  openManageCats();
+  renderStock(); openManageCats();
 }
 
 // ── ADD UNITS MODAL ───────────────────────────────
@@ -759,11 +1018,15 @@ async function markDamaged(uid){
 
 // ── ADD/EDIT ITEM TYPE ────────────────────────────
 function openAddItem(){
+  const nextId = genNextItemId();
   showModal(`
     <div class="modal-handle"></div>
     <div class="modal-title">+ เพิ่มประเภทสินค้า</div>
     <div class="grid-2">
-      <div class="field"><label>รหัสสินค้า *</label><input id="mId" placeholder="SP050"/></div>
+      <div class="field">
+        <label>รหัสสินค้า *</label>
+        <input id="mId" value="${nextId}" style="font-family:var(--mono);font-weight:700"/>
+      </div>
       <div class="field"><label>หมวดหมู่</label>
         <select id="mCat">${catGroups.map(c=>`<option value="${c.key}">${c.icon} ${c.label}</option>`).join('')}</select></div>
     </div>
@@ -929,7 +1192,6 @@ function doExportUnits(){
 }
 function downloadTemplate(){
   const wb=XLSX.utils.book_new();
-  const catList=catGroups.map(c=>`${c.key} (${c.label})`).join(', ');
   const itemSheet=XLSX.utils.aoa_to_sheet([
     ['=== Template: นำเข้าประเภทสินค้า (Items) ===','','','','',''],
     ['คำอธิบาย: กรอกข้อมูลตั้งแต่แถวที่ 4 ลงไป','','','','',''],
