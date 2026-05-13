@@ -11,21 +11,127 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="shared.js"></script>
-<!-- SheetJS for Excel Import/Export -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-/* Add mode toggle */
+/* ── Category Quick-Select Grid ─────────────── */
+.cat-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+.cat-select-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 2px solid var(--bdrm);
+  border-radius: var(--rad);
+  background: var(--surf);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all .15s;
+  position: relative;
+}
+.cat-select-btn:hover { border-color: var(--g); background: var(--gll); }
+.cat-select-btn.active {
+  border-color: var(--g);
+  background: var(--g);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(29,158,117,.25);
+}
+.cat-select-btn .csb-icon { font-size: 22px; line-height: 1; }
+.cat-select-btn .csb-name { font-size: 10px; font-weight: 700; text-align: center; line-height: 1.2; }
+.cat-select-btn .csb-count {
+  font-size: 10px; font-weight: 700;
+  background: rgba(0,0,0,.12);
+  border-radius: 20px;
+  padding: 1px 6px;
+  min-width: 20px; text-align: center;
+}
+.cat-select-btn.active .csb-count { background: rgba(255,255,255,.25); }
+.cat-select-btn .csb-badge-out {
+  position: absolute; top: 4px; right: 4px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--r);
+}
+.cat-select-btn .csb-badge-low {
+  position: absolute; top: 4px; right: 4px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--am);
+}
+/* All button */
+.cat-select-btn.cat-all { border-style: dashed; }
+
+/* Manage cats button */
+.cat-manage-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 2px dashed var(--bdrm);
+  border-radius: var(--rad);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font);
+  color: var(--tx3);
+  font-size: 10px;
+  font-weight: 700;
+  transition: all .15s;
+}
+.cat-manage-btn:hover { border-color: var(--g); color: var(--g); }
+
+/* ── Add mode toggle ─────────────────────────── */
 .add-mode-tabs{display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden;}
 .add-mode-tab{flex:1;padding:9px;font-size:12px;font-weight:700;text-align:center;cursor:pointer;background:var(--bg);color:var(--tx2);font-family:var(--font);border:none;}
 .add-mode-tab.active{background:var(--g);color:#fff;}
-.qty-input-wrap{display:flex;align-items:center;gap:10px;}
 .qty-stepper{display:flex;align-items:center;gap:0;border:1px solid var(--bdrm);border-radius:var(--rad);overflow:hidden;}
 .qty-stepper button{width:38px;height:38px;background:var(--bg);border:none;font-size:18px;cursor:pointer;font-family:var(--font);}
 .qty-stepper button:hover{background:#e0e0e0;}
 .qty-stepper input{width:60px;height:38px;text-align:center;border:none;border-left:1px solid var(--bdrm);border-right:1px solid var(--bdrm);font-size:16px;font-weight:700;font-family:var(--mono);}
 .qty-stepper input:focus{outline:none;}
 
-/* Import/Export bar */
+/* ── Manage Categories Modal ─────────────────── */
+.cat-list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bdr);
+}
+.cat-list-row:last-child { border-bottom: none; }
+.cat-list-icon { font-size: 20px; width: 28px; text-align: center; }
+.cat-list-name { flex: 1; font-size: 13px; font-weight: 600; }
+.cat-list-count { font-size: 11px; color: var(--tx3); min-width: 50px; text-align: right; }
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--bg);
+  border-radius: var(--rad);
+  border: 1px solid var(--bdrm);
+  margin-top: 6px;
+}
+.emoji-opt {
+  font-size: 20px;
+  text-align: center;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1.4;
+  border: 2px solid transparent;
+}
+.emoji-opt:hover { background: var(--gll); }
+.emoji-opt.selected { border-color: var(--g); background: var(--gll); }
+
+/* ── Import/Export bar ───────────────────────── */
 .ie-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;}
 .ie-bar .btn{font-size:12px;}
 .ie-drop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;}
@@ -88,58 +194,89 @@
 <div id="notif"></div>
 
 <script>
-// ── Fallback: เผื่อ shared.js บน server เป็นเวอร์ชันเก่าที่ไม่มี GROUP_MAP / CAT_GROUPS ──
-if(typeof GROUP_MAP === 'undefined'){
-  window.GROUP_MAP = {
-    Storage:   { label: 'Storage',         icon: '💾' },
-    Memory:    { label: 'Memory / RAM',    icon: '🧠' },
-    Component: { label: 'Component',       icon: '🔧' },
-    Network:   { label: 'Network',         icon: '🌐' },
-    Camera:    { label: 'Camera',          icon: '📷' },
-    Cable:     { label: 'Cable / Adapter', icon: '🔌' },
-    Power:     { label: 'Power Supply',    icon: '⚡' },
-    Device:    { label: 'Device',          icon: '🖥️' },
-    Other:     { label: 'อื่น ๆ',          icon: '📋' },
-  };
-}
-if(typeof CAT_GROUPS === 'undefined'){
-  window.CAT_GROUPS = Object.entries(GROUP_MAP).map(([k,v])=>({key:k,label:v.label,icon:v.icon}));
-}
-if(typeof getGroupKey === 'undefined'){
-  window.getGroupKey = function(cat){ return GROUP_MAP[cat] ? cat : 'Other'; };
-}
-if(typeof getGroupDef === 'undefined'){
-  window.getGroupDef = function(key){ return GROUP_MAP[key] || GROUP_MAP['Other']; };
-}
+// ── Default categories (fallback) ────────────────
+const DEFAULT_CATS = [
+  { key:'Storage',   label:'Storage',         icon:'💾' },
+  { key:'Memory',    label:'Memory / RAM',    icon:'🧠' },
+  { key:'Component', label:'Component',       icon:'🔧' },
+  { key:'Network',   label:'Network',         icon:'🌐' },
+  { key:'Camera',    label:'Camera',          icon:'📷' },
+  { key:'Cable',     label:'Cable / Adapter', icon:'🔌' },
+  { key:'Power',     label:'Power Supply',    icon:'⚡' },
+  { key:'Device',    label:'Device',          icon:'🖥️' },
+  { key:'Other',     label:'อื่น ๆ',          icon:'📋' },
+];
 
+// ── Fallback globals ─────────────────────────────
+if(typeof GROUP_MAP==='undefined') window.GROUP_MAP={};
+if(typeof getGroupKey==='undefined') window.getGroupKey=k=>k;
+if(typeof getGroupDef==='undefined') window.getGroupDef=k=>({label:k,icon:'📋'});
+
+// ── State ────────────────────────────────────────
 let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
-let searchQ='', expandedItem=null, openCats={}, pendingUnits=[];
-let importRows=[], importMode='stock'; // 'stock' | 'units'
+let searchQ='', expandedItem=null, selectedCat='__all__';
+let pendingUnits=[], importRows=[], importMode='stock';
+let addMode='qty';
 
+// Dynamic categories loaded from Firestore (or default)
+let catGroups = [...DEFAULT_CATS];
+
+const EMOJI_OPTIONS = ['💾','🧠','🔧','🌐','📷','🔌','⚡','🖥️','📋','🖱️','⌨️','🖨️',
+  '📱','💻','🔋','📡','🔩','🪛','🛠️','🗂️','📁','📂','💡','🔦','📟','🧰','🗜️','📲',
+  '🎮','🖲️','💿','📀','📼','📺','📻','🔬','🔭','🧲','🪝','🔐','🔑','🗝️','🔒'];
+
+// ── Init ─────────────────────────────────────────
 initShell('stock', async (user, role, firestore) => {
   currentUser=user; currentRole=role; db=firestore;
   try {
+    await loadCats();
     await loadItems();
     await loadUnits();
   } catch(e) {
     console.error('Load error:', e);
     document.getElementById('mainContent').innerHTML=
-      `<div class="empty-state" style="color:var(--r)">โหลดข้อมูลไม่สำเร็จ: ${e.message}<br><button class="btn btn-primary" style="margin-top:12px" onclick="location.reload()">ลองใหม่</button></div>`;
+      `<div class="empty-state" style="color:var(--r)">โหลดข้อมูลไม่สำเร็จ: ${e.message}<br>
+       <button class="btn btn-primary" style="margin-top:12px" onclick="location.reload()">ลองใหม่</button></div>`;
     return;
   }
   renderStock();
 });
 
-async function loadItems(){
-  // ไม่ใช้ orderBy เพื่อหลีกเลี่ยงปัญหา index — เรียง client-side แทน
+// ── Load categories from Firestore ───────────────
+async function loadCats() {
+  try {
+    const snap = await db.collection('categories').orderBy('order').get();
+    if (!snap.empty) {
+      catGroups = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    } else {
+      // First time: seed defaults
+      await seedDefaultCats();
+    }
+  } catch(e) {
+    // Firestore might not have 'categories' collection yet
+    catGroups = [...DEFAULT_CATS];
+  }
+}
+
+async function seedDefaultCats() {
+  const batch = db.batch();
+  DEFAULT_CATS.forEach((c, i) => {
+    batch.set(db.collection('categories').doc(c.key), { ...c, order: i });
+  });
+  await batch.commit();
+  catGroups = DEFAULT_CATS.map((c,i) => ({ docId: c.key, ...c, order: i }));
+}
+
+async function loadItems() {
   const snap = await db.collection('items').get();
   allItems = snap.docs.map(d=>({docId:d.id,...d.data()}));
   allItems.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
 }
-async function loadUnits(){
+async function loadUnits() {
   const snap = await db.collection('units').get();
   allUnits = snap.docs.map(d=>({docId:d.id,...d.data()}));
 }
+
 const getUnitsOf=id=>allUnits.filter(u=>u.itemId===id);
 const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
 const getItemQty=id=>getAvail(id).length;
@@ -154,74 +291,113 @@ function statusBadge(id){
   if(s==='low')return'<span class="badge badge-low">ใกล้หมด</span>';
   return'<span class="badge badge-ok">ปกติ</span>';
 }
-// BUG FIX: เพิ่มเช็ค sn !== '-' ด้วย
-function snBadge(u){ return (u.sn && u.sn!=='-')?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
+function snBadge(u){ return(u.sn&&u.sn!=='-')?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
 function unitStatBadge(s){
   if(s==='used')return'<span class="badge badge-used2">เบิกแล้ว</span>';
   if(s==='damaged')return'<span class="badge badge-dmg">ชำรุด</span>';
   return'<span class="badge badge-avail">พร้อมใช้</span>';
 }
 
-// ─── RENDER STOCK ───
-function renderStock(){
-  const isAdmin=currentRole==='admin';
-  const q=searchQ.toLowerCase();
-  const filtered=allItems.filter(i=>!q||i.name.toLowerCase().includes(q)||i.id.toLowerCase().includes(q)||(i.cat||'').toLowerCase().includes(q));
-  const grouped={};
-  filtered.forEach(item=>{const k=getGroupKey(item.cat);if(!grouped[k])grouped[k]=[];grouped[k].push(item);});
-  if(q)Object.keys(grouped).forEach(k=>openCats[k]=true);
+// ── Helper: get cat key for an item ──────────────
+function getCatKey(cat) {
+  if (!cat) return 'Other';
+  return catGroups.find(c => c.key === cat) ? cat : 'Other';
+}
+function getCatDef(key) {
+  return catGroups.find(c => c.key === key) || { key:'Other', label:'อื่น ๆ', icon:'📋' };
+}
 
-  let html=`
-  <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px">
+// ── RENDER STOCK ─────────────────────────────────
+function renderStock() {
+  const isAdmin = currentRole === 'admin';
+  const q = searchQ.toLowerCase();
+
+  // Items in selected category (or all)
+  let filtered = allItems.filter(i =>
+    !q || i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q) || (i.cat||'').toLowerCase().includes(q)
+  );
+  if (selectedCat !== '__all__') filtered = filtered.filter(i => getCatKey(i.cat) === selectedCat);
+
+  // ── Category grid ─────────────────────────────
+  let catGridHTML = `<div class="cat-select-grid">`;
+
+  // "ทั้งหมด" button
+  const totalAvail = allUnits.filter(u=>u.status==='available').length;
+  catGridHTML += `
+    <button class="cat-select-btn cat-all${selectedCat==='__all__'?' active':''}" onclick="selectCat('__all__')">
+      <span class="csb-icon">📦</span>
+      <span class="csb-name">ทั้งหมด</span>
+      <span class="csb-count">${totalAvail}</span>
+    </button>`;
+
+  catGroups.forEach(grp => {
+    const items = allItems.filter(i => getCatKey(i.cat) === grp.key);
+    const qty = items.reduce((a,i) => a+getItemQty(i.id), 0);
+    const hasOut = items.some(i => getStatus(i.id) === 'out');
+    const hasLow = !hasOut && items.some(i => getStatus(i.id) === 'low');
+    catGridHTML += `
+      <button class="cat-select-btn${selectedCat===grp.key?' active':''}" onclick="selectCat('${grp.key}')">
+        ${hasOut?`<span class="csb-badge-out"></span>`:''}
+        ${hasLow?`<span class="csb-badge-low"></span>`:''}
+        <span class="csb-icon">${grp.icon}</span>
+        <span class="csb-name">${grp.label}</span>
+        <span class="csb-count">${qty}</span>
+      </button>`;
+  });
+
+  // Manage cats button (admin only)
+  if (isAdmin) {
+    catGridHTML += `
+      <button class="cat-manage-btn" onclick="openManageCats()">
+        <span style="font-size:18px">⚙️</span>
+        <span>จัดการ</span>
+      </button>`;
+  }
+  catGridHTML += `</div>`;
+
+  // ── Top bar ───────────────────────────────────
+  let html = `
+  <div class="flex jb items-c section-gap" style="flex-wrap:wrap;gap:8px;margin-bottom:.75rem">
     <div style="font-size:15px;font-weight:700">📦 สต็อกสินค้า</div>
     <div class="search-bar">
       <input class="search-input" placeholder="ค้นหา..." value="${searchQ}" oninput="searchQ=this.value;renderStock()"/>
       ${isAdmin?`<button class="btn btn-primary btn-sm" onclick="openAddItem()">+ ประเภทใหม่</button>`:''}
     </div>
-  </div>`;
+  </div>
+  ${catGridHTML}`;
 
-  // Import/Export bar — Admin only
-  if(isAdmin){
-    html+=`
+  // ── Import/Export bar (admin) ─────────────────
+  if (isAdmin) {
+    html += `
   <div class="ie-bar">
-    <button class="btn btn-sm" onclick="openExportStock()" title="Export สต็อกทั้งหมดเป็น Excel">📥 Export Excel</button>
-    <button class="btn btn-sm" onclick="openImportStock()" title="Import สต็อกจาก Excel">📤 Import Excel</button>
-    <button class="btn btn-sm" onclick="openExportUnits()" title="Export รายการชิ้นส่วนทั้งหมด">📋 Export ชิ้นส่วน</button>
-    <button class="btn btn-sm" onclick="downloadTemplate()" title="Download ไฟล์ Template">📑 Template</button>
+    <button class="btn btn-sm" onclick="openExportStock()">📥 Export Excel</button>
+    <button class="btn btn-sm" onclick="openImportStock()">📤 Import Excel</button>
+    <button class="btn btn-sm" onclick="openExportUnits()">📋 Export ชิ้นส่วน</button>
+    <button class="btn btn-sm" onclick="downloadTemplate()">📑 Template</button>
   </div>`;
   }
 
-  CAT_GROUPS.forEach(grp=>{
-    const items=grouped[grp.key]; if(!items||!items.length)return;
-    const isOpen=openCats[grp.key]!==false;
-    const totalQty=items.reduce((a,i)=>a+getItemQty(i.id),0);
-    const outCnt=items.filter(i=>getStatus(i.id)==='out').length;
-    const lowCnt=items.filter(i=>getStatus(i.id)==='low').length;
-    html+=`
-    <div class="cat-group">
-      <div class="cat-header ${isOpen?'open':''}" onclick="toggleCat('${grp.key}')">
-        <span class="cat-icon">${grp.icon}</span>
-        <span class="cat-name">${grp.label}</span>
-        <div class="cat-counts">
-          <span class="cat-count">${items.length} รายการ · ${totalQty} ชิ้น</span>
-          ${outCnt?`<span class="badge badge-out">${outCnt} หมด`+'</span>':''}
-          ${lowCnt?`<span class="badge badge-low">${lowCnt} ใกล้หมด`+'</span>':''}
-        </div>
-        <span class="cat-arrow">▼</span>
-      </div>
-      <div class="cat-body ${isOpen?'open':''}" id="catbody-${grp.key}">
-        ${items.map(item=>renderItemRow(item,isAdmin)).join('')}
-      </div>
-    </div>`;
-  });
-  if(!filtered.length) html+=`<div class="empty-state">ไม่พบสินค้าที่ค้นหา</div>`;
-  document.getElementById('mainContent').innerHTML=html;
+  // ── Items list ────────────────────────────────
+  if (!filtered.length) {
+    html += `<div class="empty-state">ไม่พบสินค้า${selectedCat!=='__all__'?' ในหมวดนี้':''}</div>`;
+  } else {
+    filtered.forEach(item => { html += renderItemRow(item, isAdmin); });
+  }
+
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function selectCat(key) {
+  selectedCat = key;
+  expandedItem = null;
+  renderStock();
 }
 
 function renderItemRow(item, isAdmin){
   const units=getUnitsOf(item.id);
   const qty=getItemQty(item.id);
   const isExp=expandedItem===item.id;
+  const catDef=getCatDef(getCatKey(item.cat));
   return`
   <div>
     <div class="item-row ${isExp?'expanded':''}" onclick="toggleExpand('${item.id}')">
@@ -232,6 +408,7 @@ function renderItemRow(item, isAdmin){
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span class="item-code">${item.id}</span>
+          <span style="font-size:11px;color:var(--tx3)">${catDef.icon} ${catDef.label}</span>
           ${statusBadge(item.id)}
         </div>
       </div>
@@ -240,7 +417,7 @@ function renderItemRow(item, isAdmin){
         ${isAdmin?`<div class="flex gap8" onclick="event.stopPropagation()">
           <button class="btn btn-icon btn-sm" onclick="openEditItem('${item.id}')" title="แก้ไข">✏️</button>
           <button class="btn btn-icon btn-sm btn-primary" onclick="openAddUnits('${item.id}')" title="เพิ่มสต็อก">+📦</button>
-          <button class="btn btn-icon btn-sm btn-danger" onclick="confirmDeleteItem('${item.id}')" title="ลบประเภทสินค้า">🗑️</button>
+          <button class="btn btn-icon btn-sm btn-danger" onclick="confirmDeleteItem('${item.id}')" title="ลบ">🗑️</button>
         </div>`:''}
       </div>
     </div>
@@ -270,18 +447,166 @@ function renderItemRow(item, isAdmin){
   </div>`;
 }
 
-function toggleCat(key){ openCats[key]=(openCats[key]===false)?true:false; renderStock(); }
 function toggleExpand(id){ expandedItem=expandedItem===id?null:id; renderStock(); }
 
-// ─── ADD UNITS MODAL ───
-let addMode='qty';
+// ══════════════════════════════════════════════
+// ── MANAGE CATEGORIES ────────────────────────
+// ══════════════════════════════════════════════
+let editCatKey=null, editCatIcon='📋';
 
+function openManageCats(){
+  renderManageCatsModal();
+}
+
+function renderManageCatsModal(){
+  const rows = catGroups.map((c,i) => {
+    const itemCnt = allItems.filter(it=>getCatKey(it.cat)===c.key).length;
+    return `
+    <div class="cat-list-row">
+      <span class="cat-list-icon">${c.icon}</span>
+      <span class="cat-list-name">${c.label}</span>
+      <span class="cat-list-count">${itemCnt} รายการ</span>
+      <button class="btn btn-icon btn-sm" onclick="openEditCat('${c.key}')">✏️</button>
+      <button class="btn btn-icon btn-sm btn-danger" onclick="confirmDeleteCat('${c.key}')" ${itemCnt>0?'title="มีสินค้าอยู่ในหมวดนี้"':''}>🗑️</button>
+    </div>`;
+  }).join('');
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚙️ จัดการหมวดหมู่</div>
+    <div style="max-height:50vh;overflow-y:auto;margin-bottom:1rem">
+      ${rows || '<div class="fz12 txmute">ยังไม่มีหมวดหมู่</div>'}
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">ปิด</button>
+      <button class="btn btn-primary" onclick="openAddCat()">+ เพิ่มหมวดหมู่</button>
+    </div>`, true);
+}
+
+function openAddCat(){
+  editCatKey=null; editCatIcon='📋';
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">+ เพิ่มหมวดหมู่ใหม่</div>
+    ${catFormHTML('','','📋')}
+    <div class="modal-actions">
+      <button class="btn" onclick="openManageCats()">← กลับ</button>
+      <button class="btn btn-primary" onclick="doSaveCat(null)">บันทึก</button>
+    </div>`, true);
+}
+
+function openEditCat(key){
+  editCatKey=key;
+  const c=catGroups.find(x=>x.key===key)||{};
+  editCatIcon=c.icon||'📋';
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ แก้ไขหมวดหมู่</div>
+    ${catFormHTML(key, c.label||'', c.icon||'📋', true)}
+    <div class="modal-actions">
+      <button class="btn" onclick="openManageCats()">← กลับ</button>
+      <button class="btn btn-primary" onclick="doSaveCat('${key}')">บันทึก</button>
+    </div>`, true);
+}
+
+function catFormHTML(key, label, icon, lockKey=false){
+  return `
+    <div class="field">
+      <label>รหัสหมวด (ภาษาอังกฤษ ไม่มีช่องว่าง) *</label>
+      <input id="catKey" value="${key}" placeholder="เช่น Storage, MyGroup" ${lockKey?'readonly style="background:var(--bg);color:var(--tx3)"':''}/>
+    </div>
+    <div class="field">
+      <label>ชื่อหมวด *</label>
+      <input id="catLabel" value="${label}" placeholder="เช่น อุปกรณ์เก็บข้อมูล"/>
+    </div>
+    <div class="field">
+      <label>ไอคอน</label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="catIconPreview" style="font-size:28px">${icon}</span>
+        <span class="fz12 txmute">คลิกเลือกด้านล่าง</span>
+      </div>
+      <div class="emoji-grid" id="emojiGrid">
+        ${EMOJI_OPTIONS.map(e=>`<div class="emoji-opt${e===icon?' selected':''}" onclick="selectEmoji('${e}')">${e}</div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function selectEmoji(e){
+  editCatIcon=e;
+  const prev=document.getElementById('catIconPreview');
+  if(prev) prev.textContent=e;
+  document.querySelectorAll('.emoji-opt').forEach(el=>{
+    el.classList.toggle('selected', el.textContent===e);
+  });
+}
+
+async function doSaveCat(existingKey){
+  const keyInput=(document.getElementById('catKey')?.value||'').trim().replace(/\s+/g,'');
+  const label=(document.getElementById('catLabel')?.value||'').trim();
+  const icon=editCatIcon||'📋';
+  if(!keyInput||!label){showNotif('กรุณากรอกรหัสและชื่อหมวด','error');return;}
+
+  if(!existingKey){
+    // New: check duplicate key
+    if(catGroups.find(c=>c.key===keyInput)){showNotif('รหัสหมวดซ้ำ','error');return;}
+    const order=catGroups.length;
+    await db.collection('categories').doc(keyInput).set({key:keyInput,label,icon,order});
+    catGroups.push({docId:keyInput,key:keyInput,label,icon,order});
+  } else {
+    // Edit: update label+icon only (key stays same)
+    await db.collection('categories').doc(existingKey).update({label,icon});
+    const c=catGroups.find(x=>x.key===existingKey);
+    if(c){c.label=label;c.icon=icon;}
+  }
+  showNotif('บันทึกหมวดหมู่สำเร็จ');
+  renderStock();
+  openManageCats();
+}
+
+function confirmDeleteCat(key){
+  const c=catGroups.find(x=>x.key===key);
+  const itemCnt=allItems.filter(it=>getCatKey(it.cat)===key).length;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="color:var(--r)">🗑️ ลบหมวดหมู่</div>
+    <div style="background:var(--rl);border:1px solid #f0a0a0;border-radius:var(--rad);padding:.75rem 1rem;margin-bottom:1rem">
+      <div style="font-size:13px;font-weight:700">${c?.icon} ${c?.label}</div>
+    </div>
+    ${itemCnt>0?`<div class="info-box" style="background:var(--rl);border-color:#f0a0a0;color:var(--r)">
+      ⚠️ มีสินค้า <b>${itemCnt} รายการ</b> ในหมวดนี้<br>สินค้าเหล่านั้นจะถูกย้ายไปหมวด "อื่น ๆ" โดยอัตโนมัติ
+    </div>`:''}
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:1rem">การกระทำนี้ไม่สามารถย้อนกลับได้</div>
+    <div class="modal-actions">
+      <button class="btn" onclick="openManageCats()">← กลับ</button>
+      <button class="btn btn-danger" onclick="doDeleteCat('${key}')">🗑️ ยืนยันลบ</button>
+    </div>`, true);
+}
+
+async function doDeleteCat(key){
+  const itemsInCat=allItems.filter(it=>getCatKey(it.cat)===key);
+  // Move items to 'Other'
+  if(itemsInCat.length>0){
+    const batch=db.batch();
+    itemsInCat.forEach(it=>{
+      batch.update(db.collection('items').doc(it.docId),{cat:'Other'});
+      it.cat='Other';
+    });
+    await batch.commit();
+  }
+  await db.collection('categories').doc(key).delete();
+  catGroups=catGroups.filter(c=>c.key!==key);
+  if(selectedCat===key) selectedCat='__all__';
+  showNotif('ลบหมวดหมู่สำเร็จ');
+  renderStock();
+  openManageCats();
+}
+
+// ── ADD UNITS MODAL ───────────────────────────────
 function openAddUnits(itemId){
   const item=allItems.find(i=>i.id===itemId);
   addMode='qty'; pendingUnits=[{sn:'',detail:'',note:''}];
   renderAddUnitsModal(item);
 }
-
 function renderAddUnitsModal(item){
   const itemId=item.id;
   showModal(`
@@ -294,50 +619,42 @@ function renderAddUnitsModal(item){
     <div id="addModeBody">${addMode==='qty'?renderQtyMode(itemId):renderSNMode(itemId)}</div>
   `, true);
 }
-
 function renderQtyMode(itemId){
   return`
-    <div class="info-box">💡 ระบบจะสร้างรายการโดยใส่ S/N เป็น "-" ไว้ก่อน สามารถแก้ไขภายหลังได้</div>
-    <div class="field">
-      <label>จำนวนที่เพิ่ม</label>
+    <div class="info-box">💡 ระบบจะสร้างรายการโดยใส่ S/N เป็น "-" ไว้ก่อน</div>
+    <div class="field"><label>จำนวนที่เพิ่ม</label>
       <div class="qty-stepper">
         <button onclick="adjustQty(-1)">−</button>
         <input type="number" id="qtyVal" value="1" min="1" max="999" oninput="this.value=Math.max(1,parseInt(this.value)||1)"/>
         <button onclick="adjustQty(1)">+</button>
-      </div>
-    </div>
-    <div class="field"><label>รายละเอียด (ไม่บังคับ)</label><input id="qtyDetail" placeholder="เช่น 2TB SATA, Seagate"/></div>
-    <div class="field"><label>หมายเหตุ</label><input id="qtyNote" placeholder="หมายเหตุเพิ่มเติม"/></div>
+      </div></div>
+    <div class="field"><label>รายละเอียด</label><input id="qtyDetail" placeholder="เช่น 2TB SATA, Seagate"/></div>
+    <div class="field"><label>หมายเหตุ</label><input id="qtyNote" placeholder="หมายเหตุ"/></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">ยกเลิก</button>
       <button class="btn btn-primary" onclick="doSaveQty('${itemId}')">💾 บันทึก</button>
     </div>`;
 }
-
 function renderSNMode(itemId){
   return`
     <div style="display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;margin-bottom:4px;font-size:10px;font-weight:700;color:var(--tx3);padding:0 2px">
       <span>S/N</span><span>รายละเอียด</span><span>หมายเหตุ</span><span></span>
     </div>
-    <div id="pendingList">
-      ${pendingUnits.map((u,i)=>snRowHTML(u,i,itemId)).join('')}
-    </div>
+    <div id="pendingList">${pendingUnits.map((u,i)=>snRowHTML(u,i,itemId)).join('')}</div>
     <button class="btn btn-sm" style="margin-top:8px" onclick="addPendingRow('${itemId}')">+ เพิ่มแถว</button>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">ยกเลิก</button>
       <button class="btn btn-primary" id="savePendingBtn" onclick="doSaveUnits('${itemId}')">💾 บันทึก ${pendingUnits.length} ชิ้น</button>
     </div>`;
 }
-
-function setAddMode(mode, itemId){
+function setAddMode(mode,itemId){
   addMode=mode;
-  document.getElementById('addModeBody').innerHTML = mode==='qty' ? renderQtyMode(itemId) : renderSNMode(itemId);
+  document.getElementById('addModeBody').innerHTML=mode==='qty'?renderQtyMode(itemId):renderSNMode(itemId);
 }
 function adjustQty(d){
-  const el=document.getElementById('qtyVal'); if(!el)return;
+  const el=document.getElementById('qtyVal');if(!el)return;
   el.value=Math.max(1,(parseInt(el.value)||1)+d);
 }
-
 async function doSaveQty(itemId){
   const item=allItems.find(i=>i.id===itemId);
   const qty=Math.max(1,parseInt(document.getElementById('qtyVal')?.value)||1);
@@ -346,22 +663,20 @@ async function doSaveQty(itemId){
   const batch=db.batch();
   for(let i=0;i<qty;i++){
     batch.set(db.collection('units').doc(),{
-      itemId, sn:'-', detail, note, status:'available',
+      itemId,sn:'-',detail,note,status:'available',
       addedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      addedBy:currentUser.displayName, addedByUid:currentUser.uid
+      addedBy:currentUser.displayName,addedByUid:currentUser.uid
     });
   }
   batch.set(db.collection('transactions').doc(),{
-    type:'in', itemId, itemName:item.name, qty, sn:'-',
-    userId:currentUser.uid, userEmail:currentUser.email, userName:currentUser.displayName,
-    createdAt:firebase.firestore.FieldValue.serverTimestamp(), source:'manual_qty'
+    type:'in',itemId,itemName:item.name,qty,sn:'-',
+    userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),source:'manual_qty'
   });
   await batch.commit();
-  // BUG FIX: Reload units จาก Firestore แทนการ merge ที่อาจ stale
   await loadUnits();
   closeModal(); showNotif(`เพิ่ม ${qty} ชิ้นสำเร็จ`); renderStock();
 }
-
 function snRowHTML(u,i,itemId){
   return`<div class="sn-row" id="srow-${i}" style="display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center">
     <input placeholder="S/N" value="${u.sn||''}" style="padding:7px 9px;border:1px solid var(--bdrm);border-radius:var(--radsm);font-size:12px;font-family:var(--mono);width:100%" oninput="pendingUnits[${i}].sn=this.value"/>
@@ -402,12 +717,11 @@ async function doSaveUnits(itemId){
     createdAt:firebase.firestore.FieldValue.serverTimestamp(),source:'manual_sn'
   });
   await batch.commit();
-  // BUG FIX: Reload units ทั้งหมดใหม่
   await loadUnits();
   closeModal(); showNotif(`เพิ่ม ${pendingUnits.length} ชิ้นสำเร็จ`); renderStock();
 }
 
-// ─── EDIT UNIT ───
+// ── EDIT UNIT ─────────────────────────────────────
 function openEditUnit(uid){
   const u=allUnits.find(x=>x.docId===uid);if(!u)return;
   showModal(`
@@ -429,8 +743,10 @@ function openEditUnit(uid){
 }
 async function doSaveUnit(uid){
   const u=allUnits.find(x=>x.docId===uid);
-  const data={sn:document.getElementById('euSN').value.trim()||'-',detail:document.getElementById('euD').value.trim(),
-    note:document.getElementById('euN').value.trim(),status:document.getElementById('euS').value};
+  const data={sn:document.getElementById('euSN').value.trim()||'-',
+    detail:document.getElementById('euD').value.trim(),
+    note:document.getElementById('euN').value.trim(),
+    status:document.getElementById('euS').value};
   await db.collection('units').doc(uid).update(data);
   Object.assign(u,data); closeModal(); showNotif('บันทึกสำเร็จ'); renderStock();
 }
@@ -441,7 +757,7 @@ async function markDamaged(uid){
   showNotif('อัปเดตสถานะแล้ว'); renderStock();
 }
 
-// ─── ADD/EDIT ITEM TYPE ───
+// ── ADD/EDIT ITEM TYPE ────────────────────────────
 function openAddItem(){
   showModal(`
     <div class="modal-handle"></div>
@@ -449,7 +765,7 @@ function openAddItem(){
     <div class="grid-2">
       <div class="field"><label>รหัสสินค้า *</label><input id="mId" placeholder="SP050"/></div>
       <div class="field"><label>หมวดหมู่</label>
-        <select id="mCat">${['Storage','Memory','Component','Network','Cable','Power','Device','Camera','Other'].map(c=>`<option>${c}</option>`).join('')}</select></div>
+        <select id="mCat">${catGroups.map(c=>`<option value="${c.key}">${c.icon} ${c.label}</option>`).join('')}</select></div>
     </div>
     <div class="field"><label>ชื่อสินค้า *</label><input id="mName"/></div>
     <div class="grid-2">
@@ -466,9 +782,10 @@ async function doAddItem(){
   const name=document.getElementById('mName').value.trim();
   if(!id||!name){showNotif('กรุณากรอกให้ครบ','error');return;}
   if(allItems.find(i=>i.id===id)){showNotif('รหัสสินค้าซ้ำ!','error');return;}
-  if(allItems.find(i=>i.name.trim().toLowerCase()===name.toLowerCase())){showNotif('ชื่อสินค้าซ้ำกับที่มีอยู่แล้ว!','error');return;}
+  if(allItems.find(i=>i.name.trim().toLowerCase()===name.toLowerCase())){showNotif('ชื่อสินค้าซ้ำ!','error');return;}
   const data={id,name,cat:document.getElementById('mCat').value,
-    min:parseInt(document.getElementById('mMin').value)||1,loc:document.getElementById('mLoc').value};
+    min:parseInt(document.getElementById('mMin').value)||1,
+    loc:document.getElementById('mLoc').value};
   await db.collection('items').doc(id).set(data);
   allItems.push({docId:id,...data}); allItems.sort((a,b)=>a.id.localeCompare(b.id));
   closeModal(); showNotif('เพิ่มสำเร็จ'); renderStock();
@@ -481,8 +798,8 @@ function openEditItem(id){
     <div class="field"><label>ชื่อสินค้า</label><input id="eName" value="${item.name}"/></div>
     <div class="grid-2">
       <div class="field"><label>หมวดหมู่</label>
-        <select id="eCat">${['Storage','Memory','Component','Network','Cable','Power','Device','Camera','Other'].map(c=>`<option ${item.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
-      <div class="field"><label>สถานที่</label><input id="eLoc" value="${item.loc}"/></div>
+        <select id="eCat">${catGroups.map(c=>`<option value="${c.key}" ${item.cat===c.key?'selected':''}>${c.icon} ${c.label}</option>`).join('')}</select></div>
+      <div class="field"><label>สถานที่</label><input id="eLoc" value="${item.loc||''}"/></div>
     </div>
     <div class="field"><label>จำนวนขั้นต่ำ</label><input id="eMin" type="number" value="${item.min}" min="0"/></div>
     <div class="modal-actions">
@@ -498,9 +815,9 @@ async function doEditItem(id){
   Object.assign(item,data); closeModal(); showNotif('บันทึกสำเร็จ'); renderStock();
 }
 
-// ─── DELETE ITEM ───
+// ── DELETE ITEM ───────────────────────────────────
 function confirmDeleteItem(id){
-  const item=allItems.find(i=>i.id===id); if(!item)return;
+  const item=allItems.find(i=>i.id===id);if(!item)return;
   const units=allUnits.filter(u=>u.itemId===id);
   const avail=units.filter(u=>u.status==='available').length;
   showModal(`
@@ -511,8 +828,7 @@ function confirmDeleteItem(id){
       <div style="font-size:12px;color:var(--tx2);margin-top:2px">${item.id} · ${units.length} ชิ้นทั้งหมด · พร้อมใช้ ${avail} ชิ้น</div>
     </div>
     ${units.length>0?`<div class="info-box" style="background:var(--rl);border-color:#f0a0a0;color:var(--r)">
-      ⚠️ มีชิ้นส่วน <b>${units.length} ชิ้น</b> ในระบบ การลบจะลบชิ้นส่วนทั้งหมดด้วย
-    </div>`:''}
+      ⚠️ มีชิ้นส่วน <b>${units.length} ชิ้น</b> ในระบบ การลบจะลบชิ้นส่วนทั้งหมดด้วย</div>`:''}
     <div style="font-size:12px;color:var(--tx3);margin-bottom:1rem">การกระทำนี้ไม่สามารถย้อนกลับได้</div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">ยกเลิก</button>
@@ -520,7 +836,7 @@ function confirmDeleteItem(id){
     </div>`);
 }
 async function doDeleteItem(id){
-  const item=allItems.find(i=>i.id===id); if(!item)return;
+  const item=allItems.find(i=>i.id===id);if(!item)return;
   const units=allUnits.filter(u=>u.itemId===id);
   try{
     const CHUNK=400;
@@ -533,161 +849,112 @@ async function doDeleteItem(id){
     allItems=allItems.filter(i=>i.id!==id);
     allUnits=allUnits.filter(u=>u.itemId!==id);
     closeModal(); showNotif(`ลบ "${item.name}" สำเร็จ`); renderStock();
-  }catch(e){ showNotif('ลบไม่สำเร็จ: '+e.message,'error'); }
+  }catch(e){showNotif('ลบไม่สำเร็จ: '+e.message,'error');}
 }
 
-// ══════════════════════════════════════════════
-// ─── IMPORT / EXPORT EXCEL ───
-// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// ── IMPORT / EXPORT EXCEL ─────────────────────────
+// ══════════════════════════════════════════════════
+function closeIEOverlay(e){ if(e.target===document.getElementById('ieOverlay')) closeIE(); }
+function closeIE(){ document.getElementById('ieOverlay').classList.remove('show'); importRows=[]; }
 
-function closeIEOverlay(e){
-  if(e.target===document.getElementById('ieOverlay')) closeIE();
-}
-function closeIE(){
-  document.getElementById('ieOverlay').classList.remove('show');
-  importRows=[];
-}
-
-// ── EXPORT: สต็อกรวม (อิงจาก Excel ที่ส่งมา) ──
 function openExportStock(){
   document.getElementById('ieTitle').textContent='📥 Export สต็อก Spare Part';
   document.getElementById('ieBody').innerHTML=`
-    <p class="fz12 txmute" style="margin-bottom:1rem">Export รายการสต็อกทั้งหมดในรูปแบบเดียวกับไฟล์ต้นฉบับ รองรับ 2 ชีต: <b>Spare Part</b> และ <b>ชิ้นส่วน (Units)</b></p>
+    <p class="fz12 txmute" style="margin-bottom:1rem">Export รายการสต็อกทั้งหมด รองรับ 2 ชีต</p>
     <div class="flex gap8" style="flex-wrap:wrap">
       <button class="btn btn-primary" onclick="doExportStock()">📥 Export ตอนนี้</button>
       <button class="btn" onclick="closeIE()">ยกเลิก</button>
     </div>`;
   document.getElementById('ieOverlay').classList.add('show');
 }
-
 function doExportStock(){
-  const wb = XLSX.utils.book_new();
-
-  // ── Sheet 1: Spare Part (สรุปสต็อก) ──
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
-  const stockRows = [
-    [`รายการทรัพย์สิน Spare Part`, '', '', '', `อัพเดต ${dateStr}`, ''],
-    ['ลำดับ', 'รายละเอียด', 'จำนวน (นำเข้า)', 'คงเหลือ', 'สถานที่จัดเก็บ', 'หมวดหมู่']
+  const wb=XLSX.utils.book_new();
+  const now=new Date();
+  const dateStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const stockRows=[
+    [`รายการทรัพย์สิน Spare Part`,'','','',`อัพเดต ${dateStr}`,''],
+    ['ลำดับ','รายละเอียด','จำนวน (นำเข้า)','คงเหลือ','สถานที่จัดเก็บ','หมวดหมู่']
   ];
-  allItems.forEach((item, idx) => {
-    const avail = getItemQty(item.id);
-    const total = getUnitsOf(item.id).length;
-    stockRows.push([idx+1, item.name, total, avail, item.loc||'ชั้น IT', item.cat||'']);
+  allItems.forEach((item,idx)=>{
+    const avail=getItemQty(item.id);
+    const total=getUnitsOf(item.id).length;
+    stockRows.push([idx+1,item.name,total,avail,item.loc||'ชั้น IT',item.cat||'']);
   });
-  // Summary row
-  const totalAvail = allUnits.filter(u=>u.status==='available').length;
-  stockRows.push(['', 'รวมทั้งหมด', allUnits.length, totalAvail, '', '']);
-
-  const ws1 = XLSX.utils.aoa_to_sheet(stockRows);
-  ws1['!cols'] = [{wch:8},{wch:35},{wch:16},{wch:10},{wch:20},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, ws1, 'Spare Part');
-
-  // ── Sheet 2: Units (ชิ้นส่วนแต่ละชิ้น) ──
-  const unitRows = [
-    ['รหัสสินค้า', 'ชื่อสินค้า', 'หมวดหมู่', 'S/N', 'รายละเอียด', 'สถานะ', 'ใช้งานที่', 'หมายเหตุ']
-  ];
-  allItems.forEach(item => {
-    const units = getUnitsOf(item.id);
-    units.forEach(u => {
-      const statusTH = u.status==='available'?'พร้อมใช้':u.status==='used'?'เบิกแล้ว':'ชำรุด';
-      unitRows.push([item.id, item.name, item.cat||'', u.sn||'-', u.detail||'', statusTH, u.usedAtLabel||'', u.note||'']);
+  stockRows.push(['','รวมทั้งหมด',allUnits.length,allUnits.filter(u=>u.status==='available').length,'','']);
+  const ws1=XLSX.utils.aoa_to_sheet(stockRows);
+  ws1['!cols']=[{wch:8},{wch:35},{wch:16},{wch:10},{wch:20},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Spare Part');
+  const unitRows=[['รหัสสินค้า','ชื่อสินค้า','หมวดหมู่','S/N','รายละเอียด','สถานะ','ใช้งานที่','หมายเหตุ']];
+  allItems.forEach(item=>{
+    getUnitsOf(item.id).forEach(u=>{
+      const statusTH=u.status==='available'?'พร้อมใช้':u.status==='used'?'เบิกแล้ว':'ชำรุด';
+      unitRows.push([item.id,item.name,item.cat||'',u.sn||'-',u.detail||'',statusTH,u.usedAtLabel||'',u.note||'']);
     });
   });
-  const ws2 = XLSX.utils.aoa_to_sheet(unitRows);
-  ws2['!cols'] = [{wch:10},{wch:30},{wch:12},{wch:20},{wch:25},{wch:12},{wch:15},{wch:20}];
-  XLSX.utils.book_append_sheet(wb, ws2, 'ชิ้นส่วน (Units)');
-
-  // ── Sheet 3: เบิกออก (ประวัติ) ──
-  // (ดึงจาก transactions ที่โหลดไว้แล้ว — ถ้าต้องการให้ครบ ควรดึงเพิ่ม แต่ตอนนี้ทำ stub)
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['หมายเหตุ'],['ดูประวัติการเบิกได้ที่หน้า ประวัติ']]), 'เบิกออก');
-
-  XLSX.writeFile(wb, `RYG_Stock_${dateStr}.xlsx`);
+  const ws2=XLSX.utils.aoa_to_sheet(unitRows);
+  ws2['!cols']=[{wch:10},{wch:30},{wch:12},{wch:20},{wch:25},{wch:12},{wch:15},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws2,'ชิ้นส่วน (Units)');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['หมายเหตุ'],['ดูประวัติการเบิกได้ที่หน้า ประวัติ']]),'เบิกออก');
+  XLSX.writeFile(wb,`RYG_Stock_${dateStr}.xlsx`);
   showNotif('Export สำเร็จ!'); closeIE();
 }
-
-// ── EXPORT: ชิ้นส่วน (Units) ──
 function openExportUnits(){
   document.getElementById('ieTitle').textContent='📋 Export รายการชิ้นส่วน';
   document.getElementById('ieBody').innerHTML=`
-    <p class="fz12 txmute" style="margin-bottom:1rem">Export รายละเอียดชิ้นส่วนทุกชิ้น พร้อม S/N, สถานะ, สถานที่ใช้งาน</p>
+    <p class="fz12 txmute" style="margin-bottom:1rem">Export รายละเอียดชิ้นส่วนทุกชิ้น</p>
     <div class="flex gap8">
       <button class="btn btn-primary" onclick="doExportUnits()">📋 Export ตอนนี้</button>
       <button class="btn" onclick="closeIE()">ยกเลิก</button>
     </div>`;
   document.getElementById('ieOverlay').classList.add('show');
 }
-
 function doExportUnits(){
-  const wb = XLSX.utils.book_new();
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
-  const rows = [['รหัสสินค้า','ชื่อสินค้า','หมวดหมู่','S/N','รายละเอียด','สถานะ','ใช้งานที่','วันที่เพิ่ม','เพิ่มโดย','หมายเหตุ']];
-  allItems.forEach(item => {
-    getUnitsOf(item.id).forEach(u => {
-      const statusTH = u.status==='available'?'พร้อมใช้':u.status==='used'?'เบิกแล้ว':'ชำรุด';
-      const addedAt = u.addedAt?.toDate ? u.addedAt.toDate().toLocaleDateString('th-TH') : '';
-      rows.push([item.id, item.name, item.cat||'', u.sn||'-', u.detail||'', statusTH, u.usedAtLabel||'', addedAt, u.addedBy||'', u.note||'']);
+  const wb=XLSX.utils.book_new();
+  const now=new Date();
+  const dateStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const rows=[['รหัสสินค้า','ชื่อสินค้า','หมวดหมู่','S/N','รายละเอียด','สถานะ','ใช้งานที่','วันที่เพิ่ม','เพิ่มโดย','หมายเหตุ']];
+  allItems.forEach(item=>{
+    getUnitsOf(item.id).forEach(u=>{
+      const statusTH=u.status==='available'?'พร้อมใช้':u.status==='used'?'เบิกแล้ว':'ชำรุด';
+      const addedAt=u.addedAt?.toDate?u.addedAt.toDate().toLocaleDateString('th-TH'):'';
+      rows.push([item.id,item.name,item.cat||'',u.sn||'-',u.detail||'',statusTH,u.usedAtLabel||'',addedAt,u.addedBy||'',u.note||'']);
     });
   });
-
-  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!cols']=[{wch:10},{wch:30},{wch:12},{wch:20},{wch:25},{wch:12},{wch:15},{wch:14},{wch:15},{wch:20}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Units');
-  XLSX.writeFile(wb, `RYG_Units_${dateStr}.xlsx`);
+  XLSX.utils.book_append_sheet(wb,ws,'Units');
+  XLSX.writeFile(wb,`RYG_Units_${dateStr}.xlsx`);
   showNotif('Export ชิ้นส่วนสำเร็จ!'); closeIE();
 }
-
-// ── DOWNLOAD TEMPLATE ──
 function downloadTemplate(){
-  const wb = XLSX.utils.book_new();
-
-  // Sheet: นำเข้าสต็อก (Item Types)
-  const itemSheet = XLSX.utils.aoa_to_sheet([
+  const wb=XLSX.utils.book_new();
+  const catList=catGroups.map(c=>`${c.key} (${c.label})`).join(', ');
+  const itemSheet=XLSX.utils.aoa_to_sheet([
     ['=== Template: นำเข้าประเภทสินค้า (Items) ===','','','','',''],
-    ['คำอธิบาย: กรอกข้อมูลตั้งแต่แถวที่ 4 ลงไป ห้ามแก้ไขแถว Header','','','','',''],
+    ['คำอธิบาย: กรอกข้อมูลตั้งแต่แถวที่ 4 ลงไป','','','','',''],
     ['รหัสสินค้า *','ชื่อสินค้า *','หมวดหมู่','จำนวนขั้นต่ำ','สถานที่จัดเก็บ','หมายเหตุ'],
     ['SP050','ตัวอย่าง: RAM DDR5 16GB','Memory',2,'ชั้น IT',''],
-    ['SP051','ตัวอย่าง: SSD NVMe 512GB','Storage',1,'ชั้น IT',''],
   ]);
   itemSheet['!cols']=[{wch:14},{wch:35},{wch:14},{wch:14},{wch:18},{wch:20}];
-  XLSX.utils.book_append_sheet(wb, itemSheet, 'Template_Items');
-
-  // Sheet: นำเข้าชิ้นส่วน (Units)
-  const unitSheet = XLSX.utils.aoa_to_sheet([
+  XLSX.utils.book_append_sheet(wb,itemSheet,'Template_Items');
+  const unitSheet=XLSX.utils.aoa_to_sheet([
     ['=== Template: นำเข้าชิ้นส่วน (Units) ===','','','',''],
-    ['คำอธิบาย: ระบุ รหัสสินค้า ให้ตรงกับที่มีในระบบ','','','',''],
-    ['รหัสสินค้า *','S/N (หรือ - ถ้าไม่มี)','รายละเอียด','หมายเหตุ','จำนวน (กรณีไม่มี S/N)'],
-    ['SP001','SN-12345','SSD 128GB SATA Toshiba','','1'],
-    ['SP007','-','RAM PC3 8GB Kingston','สภาพดี','1'],
-    ['SP004','-','HDD 500GB Seagate','','3'],
+    ['รหัสสินค้า *','S/N','รายละเอียด','หมายเหตุ','จำนวน'],
+    ['SP001','SN-12345','SSD 128GB SATA','','1'],
+    ['SP007','-','RAM 8GB Kingston','สภาพดี','1'],
   ]);
   unitSheet['!cols']=[{wch:14},{wch:20},{wch:28},{wch:18},{wch:16}];
-  XLSX.utils.book_append_sheet(wb, unitSheet, 'Template_Units');
-
-  // Sheet: หมวดหมู่
-  const catSheet = XLSX.utils.aoa_to_sheet([
-    ['หมวดหมู่ที่รองรับ','คำอธิบาย'],
-    ['Storage','HDD, SSD'],
-    ['Memory','RAM'],
-    ['Component','CPU, GPU, PSU, PCI Card'],
-    ['Network','Switch, Network Adapter'],
-    ['Cable','สายไฟ, สายสัญญาณ'],
-    ['Power','Adapter, PSU'],
-    ['Device','Monitor, Computer, Keyboard, Mouse, Webcam, Printer'],
-    ['Camera','IP Camera, กล้องวงจรปิด'],
-    ['Other','อื่นๆ'],
+  XLSX.utils.book_append_sheet(wb,unitSheet,'Template_Units');
+  const catSheet=XLSX.utils.aoa_to_sheet([
+    ['หมวดหมู่ที่มีในระบบ'],
+    ...catGroups.map(c=>[`${c.key}`,`${c.label}`])
   ]);
-  catSheet['!cols']=[{wch:14},{wch:30}];
-  XLSX.utils.book_append_sheet(wb, catSheet, 'หมวดหมู่');
-
-  XLSX.writeFile(wb, 'RYG_Stock_Template.xlsx');
+  catSheet['!cols']=[{wch:16},{wch:28}];
+  XLSX.utils.book_append_sheet(wb,catSheet,'หมวดหมู่');
+  XLSX.writeFile(wb,'RYG_Stock_Template.xlsx');
   showNotif('ดาวน์โหลด Template สำเร็จ!');
 }
-
-// ── IMPORT: นำเข้าสต็อก ──
 function openImportStock(){
   importRows=[];
   document.getElementById('ieTitle').textContent='📤 Import Excel';
@@ -695,63 +962,56 @@ function openImportStock(){
     <div class="ie-section">
       <div class="ie-section-title">เลือกประเภทการ Import</div>
       <div style="display:flex;gap:8px;margin-bottom:.5rem">
-        <button class="btn btn-sm ${importMode==='stock'?'btn-primary':''}" onclick="setImportMode('stock')">📦 ประเภทสินค้า (Items)</button>
-        <button class="btn btn-sm ${importMode==='units'?'btn-primary':''}" onclick="setImportMode('units')">🔢 ชิ้นส่วน (Units)</button>
+        <button class="btn btn-sm ${importMode==='stock'?'btn-primary':''}" onclick="setImportMode('stock')">📦 ประเภทสินค้า</button>
+        <button class="btn btn-sm ${importMode==='units'?'btn-primary':''}" onclick="setImportMode('units')">🔢 ชิ้นส่วน</button>
       </div>
-      <div class="fz11 txmute" id="importModeDesc">${importMode==='stock'?'Import รายการประเภทสินค้าใหม่ (Items) — จะไม่ทับรายการที่มีรหัสซ้ำ':'Import ชิ้นส่วนแต่ละชิ้น (Units) โดยอ้างอิง รหัสสินค้า ที่มีในระบบ'}</div>
+      <div class="fz11 txmute" id="importModeDesc">${importMode==='stock'?'Import รายการประเภทสินค้าใหม่':'Import ชิ้นส่วนแต่ละชิ้น'}</div>
     </div>
     <div class="ie-section">
       <div class="ie-section-title">อัปโหลดไฟล์ Excel</div>
-      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" 
-        ondragover="event.preventDefault();this.classList.add('drag')" 
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
         ondragleave="this.classList.remove('drag')"
         ondrop="handleDrop(event)">
         <div class="dz-icon">📊</div>
-        <div class="dz-text">คลิกหรือลากไฟล์ .xlsx มาวาง</div>
-        <div class="fz11 txmute" style="margin-top:4px">รองรับ .xlsx, .xls</div>
+        <div class="dz-text">คลิกหรือลากไฟล์ .xlsx</div>
       </div>
       <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(this)"/>
     </div>
     <div id="importPreviewArea"></div>
     <div class="flex gap8" id="importActions" style="display:none!important">
-      <button class="btn btn-primary" id="importConfirmBtn" onclick="doImport()">✅ นำเข้าข้อมูล</button>
+      <button class="btn btn-primary" id="importConfirmBtn" onclick="doImport()">✅ นำเข้า</button>
       <button class="btn" onclick="closeIE()">ยกเลิก</button>
     </div>`;
   document.getElementById('ieOverlay').classList.add('show');
 }
-
 function setImportMode(mode){
   importMode=mode; importRows=[];
   const desc=document.getElementById('importModeDesc');
-  if(desc) desc.textContent=mode==='stock'?'Import รายการประเภทสินค้าใหม่ (Items) — จะไม่ทับรายการที่มีรหัสซ้ำ':'Import ชิ้นส่วนแต่ละชิ้น (Units) โดยอ้างอิง รหัสสินค้า ที่มีในระบบ';
+  if(desc) desc.textContent=mode==='stock'?'Import รายการประเภทสินค้าใหม่':'Import ชิ้นส่วนแต่ละชิ้น';
   document.querySelectorAll('#ieBody .btn-sm').forEach(b=>{
     b.classList.remove('btn-primary');
-    if(b.textContent.includes(mode==='stock'?'Items':'Units')) b.classList.add('btn-primary');
+    if((mode==='stock'&&b.textContent.includes('ประเภท'))||(mode==='units'&&b.textContent.includes('ชิ้นส่วน'))) b.classList.add('btn-primary');
   });
   document.getElementById('importPreviewArea').innerHTML='';
   document.getElementById('importActions').style.display='none';
 }
-
 function handleDrop(e){
   e.preventDefault();
   document.getElementById('dropZone').classList.remove('drag');
-  const file=e.dataTransfer.files[0]; if(file) parseExcelFile(file);
+  const file=e.dataTransfer.files[0];if(file)parseExcelFile(file);
 }
-function handleFileSelect(input){ const file=input.files[0]; if(file) parseExcelFile(file); }
-
+function handleFileSelect(input){const file=input.files[0];if(file)parseExcelFile(file);}
 function parseExcelFile(file){
   const reader=new FileReader();
   reader.onload=e=>{
     try{
       const wb=XLSX.read(e.target.result,{type:'array'});
-      // หา sheet ที่เหมาะสม: ลอง Template_Items/Template_Units ก่อน แล้วค่อย sheet แรก
       let sheetName;
       if(importMode==='stock'){
-        sheetName=wb.SheetNames.find(n=>n.toLowerCase().includes('template_item')||n.toLowerCase().includes('spare part')||n==='Sapre Part')
-          ||wb.SheetNames[0];
+        sheetName=wb.SheetNames.find(n=>n.toLowerCase().includes('template_item')||n.toLowerCase().includes('spare part'))||wb.SheetNames[0];
       } else {
-        sheetName=wb.SheetNames.find(n=>n.toLowerCase().includes('template_unit')||n.toLowerCase().includes('unit'))
-          ||wb.SheetNames[0];
+        sheetName=wb.SheetNames.find(n=>n.toLowerCase().includes('template_unit')||n.toLowerCase().includes('unit'))||wb.SheetNames[0];
       }
       const ws=wb.Sheets[sheetName];
       const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
@@ -763,129 +1023,103 @@ function parseExcelFile(file){
   };
   reader.readAsArrayBuffer(file);
 }
-
 function parseStockRows(raw){
-  // หา header row: แถวที่มี "รหัสสินค้า" หรือ "ลำดับ"
   let headerIdx=-1;
   for(let i=0;i<Math.min(raw.length,10);i++){
     const row=raw[i].map(c=>String(c||'').trim());
-    if(row.some(c=>c.includes('รหัส')||c.includes('SP')||c.includes('ชื่อ'))) { headerIdx=i; break; }
+    if(row.some(c=>c.includes('รหัส')||c.includes('ชื่อ'))){headerIdx=i;break;}
   }
-  // ถ้าไม่เจอ header ให้ถือว่าแถวแรกเป็น header หรือข้ามแถว comment
   const dataStart=headerIdx>=0?headerIdx+1:2;
   const parsed=[];
   for(let i=dataStart;i<raw.length;i++){
     const row=raw[i];
     const idRaw=String(row[0]||'').trim();
     const nameRaw=String(row[1]||'').trim();
-    if(!idRaw||!nameRaw||idRaw.startsWith('=')) continue;
-    // ตรวจสอบ format รหัส
+    if(!idRaw||!nameRaw||idRaw.startsWith('='))continue;
     const id=idRaw.toUpperCase();
     const exists=!!allItems.find(item=>item.id===id);
     const cat=String(row[2]||'Other').trim();
     const min=parseInt(row[3])||1;
     const loc=String(row[4]||'ชั้น IT').trim();
-    const note=String(row[5]||'').trim();
-    let status='ok', msg='';
-    if(!id.match(/^[A-Z0-9]{2,10}$/)){status='warn';msg='รหัสควรเป็นตัวอักษรหรือตัวเลข 2-10 ตัว';}
-    if(exists){status='skip';msg='รหัสซ้ำ — จะข้ามรายการนี้';}
-    parsed.push({id,name:nameRaw,cat,min,loc,note,exists,status,msg,orig:row});
+    let status='ok',msg='';
+    if(!id.match(/^[A-Z0-9]{2,10}$/)){status='warn';msg='รหัสควรเป็นตัวอักษร 2-10 ตัว';}
+    if(exists){status='skip';msg='รหัสซ้ำ — จะข้าม';}
+    parsed.push({id,name:nameRaw,cat,min,loc,exists,status,msg});
   }
-  importRows=parsed;
-  renderImportPreviewStock();
+  importRows=parsed; renderImportPreviewStock();
 }
-
 function parseUnitRows(raw){
-  // หา header
   let dataStart=1;
   for(let i=0;i<Math.min(raw.length,10);i++){
     const row=raw[i].map(c=>String(c||'').trim());
-    if(row.some(c=>c.includes('รหัส')||c==='S/N'||c.includes('ชิ้นส่วน'))){ dataStart=i+1; break; }
+    if(row.some(c=>c.includes('รหัส')||c==='S/N')){dataStart=i+1;break;}
   }
   const parsed=[];
   for(let i=dataStart;i<raw.length;i++){
     const row=raw[i];
     const itemId=String(row[0]||'').trim().toUpperCase();
-    if(!itemId||itemId.startsWith('=')) continue;
+    if(!itemId||itemId.startsWith('='))continue;
     const sn=String(row[1]||'-').trim()||'-';
     const detail=String(row[2]||'').trim();
     const note=String(row[3]||'').trim();
     const qty=Math.max(1,parseInt(row[4])||1);
     const item=allItems.find(it=>it.id===itemId);
-    let status='ok', msg='';
-    if(!item){status='err';msg='ไม่พบรหัสสินค้าในระบบ';}
-    else if(sn!=='-'&&allUnits.find(u=>u.itemId===itemId&&u.sn===sn&&u.sn!=='-')){status='warn';msg='S/N ซ้ำในระบบ';}
+    let status='ok',msg='';
+    if(!item){status='err';msg='ไม่พบรหัสสินค้า';}
     parsed.push({itemId,itemName:item?.name||'?',sn,detail,note,qty:sn!=='-'?1:qty,status,msg,item});
   }
-  importRows=parsed;
-  renderImportPreviewUnits();
+  importRows=parsed; renderImportPreviewUnits();
 }
-
 function renderImportPreviewStock(){
   const ok=importRows.filter(r=>r.status==='ok').length;
   const skip=importRows.filter(r=>r.status==='skip').length;
   const warn=importRows.filter(r=>r.status==='warn').length;
-  const summClass=skip>0||warn>0?'warn':'';
-  const area=document.getElementById('importPreviewArea');
-  area.innerHTML=`
-    <div class="import-summary ${summClass}">
-      พบ ${importRows.length} แถว · จะนำเข้า ${ok+warn} รายการ · ข้าม ${skip} รายการ (รหัสซ้ำ)
+  document.getElementById('importPreviewArea').innerHTML=`
+    <div class="import-summary ${skip>0||warn>0?'warn':''}">
+      พบ ${importRows.length} แถว · จะนำเข้า ${ok+warn} · ข้าม ${skip} (ซ้ำ)
     </div>
     <div class="import-preview" style="max-height:220px;overflow-y:auto">
-      <table>
-        <tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th><th>หมวด</th><th>Min</th><th>สถานะ</th></tr>
-        ${importRows.map((r,i)=>`<tr>
-          <td>${i+1}</td>
-          <td class="ie-row-${r.status==='skip'?'warn':r.status}">${r.id}</td>
-          <td>${r.name}</td><td>${r.cat}</td><td>${r.min}</td>
-          <td class="ie-row-${r.status==='skip'?'warn':r.status}">${r.msg||'✓ OK'}</td>
-        </tr>`).join('')}
-      </table>
+      <table><tr><th>#</th><th>รหัส</th><th>ชื่อ</th><th>หมวด</th><th>สถานะ</th></tr>
+      ${importRows.map((r,i)=>`<tr><td>${i+1}</td>
+        <td class="ie-row-${r.status==='skip'?'warn':r.status}">${r.id}</td>
+        <td>${r.name}</td><td>${r.cat}</td>
+        <td class="ie-row-${r.status==='skip'?'warn':r.status}">${r.msg||'✓ OK'}</td>
+      </tr>`).join('')}</table>
     </div>`;
   const actEl=document.getElementById('importActions');
   actEl.style.cssText='display:flex;gap:8px;margin-top:1rem';
   const btn=document.getElementById('importConfirmBtn');
-  btn.disabled=(ok+warn)===0;
-  btn.textContent=`✅ นำเข้า ${ok+warn} รายการ`;
+  btn.disabled=(ok+warn)===0; btn.textContent=`✅ นำเข้า ${ok+warn} รายการ`;
 }
-
 function renderImportPreviewUnits(){
   const ok=importRows.filter(r=>r.status!=='err').length;
   const err=importRows.filter(r=>r.status==='err').length;
-  const area=document.getElementById('importPreviewArea');
-  area.innerHTML=`
+  document.getElementById('importPreviewArea').innerHTML=`
     <div class="import-summary ${err>0?'warn':''}">
-      พบ ${importRows.length} แถว · จะนำเข้า ${ok} รายการ · ข้าม ${err} รายการ (ไม่พบ Item)
+      พบ ${importRows.length} แถว · จะนำเข้า ${ok} · ข้าม ${err}
     </div>
     <div class="import-preview" style="max-height:220px;overflow-y:auto">
-      <table>
-        <tr><th>#</th><th>รหัส</th><th>ชื่อ</th><th>S/N</th><th>รายละเอียด</th><th>จำนวน</th><th>สถานะ</th></tr>
-        ${importRows.map((r,i)=>`<tr>
-          <td>${i+1}</td>
-          <td class="ie-row-${r.status==='err'?'err':'ok'}">${r.itemId}</td>
-          <td>${r.itemName}</td>
-          <td style="font-family:var(--mono);font-size:11px">${r.sn}</td>
-          <td>${r.detail}</td><td>${r.qty}</td>
-          <td class="ie-row-${r.status==='err'?'err':r.status==='warn'?'warn':'ok'}">${r.msg||'✓ OK'}</td>
-        </tr>`).join('')}
-      </table>
+      <table><tr><th>#</th><th>รหัส</th><th>ชื่อ</th><th>S/N</th><th>จำนวน</th><th>สถานะ</th></tr>
+      ${importRows.map((r,i)=>`<tr><td>${i+1}</td>
+        <td class="ie-row-${r.status==='err'?'err':'ok'}">${r.itemId}</td>
+        <td>${r.itemName}</td>
+        <td style="font-family:var(--mono);font-size:11px">${r.sn}</td>
+        <td>${r.qty}</td>
+        <td class="ie-row-${r.status==='err'?'err':r.status==='warn'?'warn':'ok'}">${r.msg||'✓ OK'}</td>
+      </tr>`).join('')}</table>
     </div>`;
   const actEl=document.getElementById('importActions');
   actEl.style.cssText='display:flex;gap:8px;margin-top:1rem';
   const btn=document.getElementById('importConfirmBtn');
-  btn.disabled=ok===0;
-  btn.textContent=`✅ นำเข้า ${ok} ชิ้น`;
+  btn.disabled=ok===0; btn.textContent=`✅ นำเข้า ${ok} ชิ้น`;
 }
-
 async function doImport(){
-  if(!importRows.length) return;
+  if(!importRows.length)return;
   const btn=document.getElementById('importConfirmBtn');
   btn.disabled=true; btn.textContent='กำลังนำเข้า...';
-
-  const progressHTML=`<div class="progress-bar"><div class="progress-fill" id="importProg" style="width:0%"></div></div>
-    <div class="fz12 txmute" id="importProgText">กำลังนำเข้า...</div>`;
-  document.getElementById('importPreviewArea').insertAdjacentHTML('afterbegin',progressHTML);
-
+  document.getElementById('importPreviewArea').insertAdjacentHTML('afterbegin',
+    `<div class="progress-bar"><div class="progress-fill" id="importProg" style="width:0%"></div></div>
+     <div class="fz12 txmute" id="importProgText">กำลังนำเข้า...</div>`);
   try{
     if(importMode==='stock') await doImportItems();
     else await doImportUnits();
@@ -894,11 +1128,9 @@ async function doImport(){
     btn.disabled=false; btn.textContent='ลองใหม่';
   }
 }
-
 async function doImportItems(){
   const toAdd=importRows.filter(r=>r.status!=='skip');
   let done=0;
-  // batch เป็นกลุ่มๆ ละ 400 (Firestore limit 500)
   const CHUNK=400;
   for(let s=0;s<toAdd.length;s+=CHUNK){
     const batch=db.batch();
@@ -908,17 +1140,16 @@ async function doImportItems(){
     await batch.commit();
     done+=Math.min(CHUNK,toAdd.length-s);
     const pct=Math.round(done/toAdd.length*100);
-    const pg=document.getElementById('importProg'); if(pg)pg.style.width=pct+'%';
-    const pt=document.getElementById('importProgText'); if(pt)pt.textContent=`นำเข้า ${done}/${toAdd.length}...`;
+    const pg=document.getElementById('importProg');if(pg)pg.style.width=pct+'%';
+    const pt=document.getElementById('importProgText');if(pt)pt.textContent=`นำเข้า ${done}/${toAdd.length}...`;
   }
   await loadItems(); await loadUnits();
   showNotif(`นำเข้าสำเร็จ ${toAdd.length} รายการ`);
   renderStock(); closeIE();
 }
-
 async function doImportUnits(){
   const toAdd=importRows.filter(r=>r.status!=='err');
-  let done=0, totalUnits=0;
+  let done=0,totalUnits=0;
   const CHUNK=400;
   for(let s=0;s<toAdd.length;s+=CHUNK){
     const batch=db.batch();
@@ -927,25 +1158,22 @@ async function doImportUnits(){
       for(let k=0;k<count;k++){
         totalUnits++;
         batch.set(db.collection('units').doc(),{
-          itemId:r.itemId, sn:r.sn, detail:r.detail, note:r.note,
-          status:'available',
+          itemId:r.itemId,sn:r.sn,detail:r.detail,note:r.note,status:'available',
           addedAt:firebase.firestore.FieldValue.serverTimestamp(),
-          addedBy:currentUser.displayName, addedByUid:currentUser.uid
+          addedBy:currentUser.displayName,addedByUid:currentUser.uid
         });
       }
-      // transaction log
       batch.set(db.collection('transactions').doc(),{
-        type:'in', itemId:r.itemId, itemName:r.itemName,
-        qty:count, sn:r.sn,
-        userId:currentUser.uid, userEmail:currentUser.email, userName:currentUser.displayName,
-        createdAt:firebase.firestore.FieldValue.serverTimestamp(), source:'excel_import'
+        type:'in',itemId:r.itemId,itemName:r.itemName,qty:count,sn:r.sn,
+        userId:currentUser.uid,userEmail:currentUser.email,userName:currentUser.displayName,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp(),source:'excel_import'
       });
     });
     await batch.commit();
     done+=Math.min(CHUNK,toAdd.length-s);
     const pct=Math.round(done/toAdd.length*100);
-    const pg=document.getElementById('importProg'); if(pg)pg.style.width=pct+'%';
-    const pt=document.getElementById('importProgText'); if(pt)pt.textContent=`นำเข้า ${done}/${toAdd.length} รายการ...`;
+    const pg=document.getElementById('importProg');if(pg)pg.style.width=pct+'%';
+    const pt=document.getElementById('importProgText');if(pt)pt.textContent=`นำเข้า ${done}/${toAdd.length}...`;
   }
   await loadUnits();
   showNotif(`นำเข้าสำเร็จ ${toAdd.length} รายการ (${totalUnits} ชิ้น)`);
