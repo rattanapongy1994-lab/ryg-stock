@@ -32,10 +32,18 @@
   border-color: var(--g);
   box-shadow: 0 0 0 3px var(--gll);
 }
+/* แสดงวันที่แบบ วว/ดด/ปปปป */
 .date-display {
-  font-size: 12px;
-  color: var(--tx3);
-  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx1);
+  margin-top: 5px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-radius: var(--rad);
+  border: 1px solid var(--bdrm);
+  display: inline-block;
+  min-width: 120px;
 }
 /* Quick date buttons */
 .date-quick {
@@ -60,6 +68,11 @@
   background: var(--g);
   color: #fff;
   border-color: var(--g);
+}
+/* Dept other input */
+#wDeptOther {
+  margin-top: 6px;
+  display: none;
 }
 </style>
 </head>
@@ -91,7 +104,6 @@
 <script>
 let allItems=[], allUnits=[], currentUser=null, currentRole='user', db=null;
 let withdrawUnits=[], currentServiceNo='';
-// Selected withdraw date (ISO string yyyy-mm-dd), default = today
 let selectedDate = todayISO();
 
 function todayISO() {
@@ -99,6 +111,14 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+/* ── วันที่: วว/ดด/ปปปป (พ.ศ.) ─────────────────── */
+function isoToDMY(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/* ยังคง Thai-long ไว้สำหรับใบเบิก (ส่วน header) */
 function isoToThaiLong(iso) {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
@@ -125,12 +145,11 @@ const getAvail=id=>allUnits.filter(u=>u.itemId===id&&u.status==='available');
 const getItemQty=id=>getAvail(id).length;
 function snBadge(u){ return (u.sn&&u.sn!=='-')?`<span class="badge badge-sn">${u.sn}</span>`:`<span class="unit-nosn">ไม่มี S/N</span>`; }
 
-// ── Date helpers ──────────────────────────────────
+/* ── Date helpers ──────────────────────────────── */
 function setQuickDate(offset) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
   selectedDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  // Update input + display without full re-render
   const inp = document.getElementById('wDate');
   if (inp) { inp.value = selectedDate; updateDateDisplay(); }
   document.querySelectorAll('.date-quick-btn').forEach(b => {
@@ -146,10 +165,27 @@ function onDateChange() {
 
 function updateDateDisplay() {
   const el = document.getElementById('wDateDisplay');
-  if (el) el.textContent = selectedDate ? isoToThaiLong(selectedDate) : '';
+  if (el) el.textContent = selectedDate ? isoToDMY(selectedDate) : '';
 }
 
-// ── Render ────────────────────────────────────────
+/* ── แผนก dropdown ─────────────────────────────── */
+function onDeptChange() {
+  const sel = document.getElementById('wDept');
+  const other = document.getElementById('wDeptOther');
+  if (!sel || !other) return;
+  other.style.display = sel.value === '__other__' ? 'block' : 'none';
+}
+
+function getDeptValue() {
+  const sel = document.getElementById('wDept');
+  if (!sel) return '';
+  if (sel.value === '__other__') {
+    return (document.getElementById('wDeptOtherInput')?.value || '').trim();
+  }
+  return sel.value;
+}
+
+/* ── Render ────────────────────────────────────── */
 function renderWithdraw(){
   document.getElementById('mainContent').innerHTML=`
   <div class="card" style="margin-bottom:1rem;padding:1rem">
@@ -162,10 +198,23 @@ function renderWithdraw(){
     </div>
     <div class="grid-2">
       <div class="field"><label>ชื่อผู้เบิก</label><input id="wReqBy" value="${currentUser?.displayName||''}"/></div>
-      <div class="field"><label>แผนก</label><input id="wDept" placeholder="เช่น ฝ่าย IT"/></div>
+
+      <!-- แผนก: dropdown IT / อื่นๆ -->
+      <div class="field">
+        <label>แผนก</label>
+        <select id="wDept" onchange="onDeptChange()">
+          <option value="">— เลือก —</option>
+          <option value="IT">IT</option>
+          <option value="__other__">อื่นๆ</option>
+        </select>
+        <div id="wDeptOther">
+          <input id="wDeptOtherInput" placeholder="ระบุแผนก..."/>
+        </div>
+      </div>
     </div>
     <div class="grid-2">
-      <div class="field"><label>ใช้งานที่ *</label><input id="wUsedAt" placeholder="เช่น PC-05"/></div>
+      <!-- ใช้งานที่: ไม่บังคับ -->
+      <div class="field"><label>ใช้งานที่</label><input id="wUsedAt" placeholder="เช่น PC-05"/></div>
       <div class="field"><label>ใบ Service</label>
         <select id="wHasService">
           <option value="no">ไม่มี</option>
@@ -186,7 +235,8 @@ function renderWithdraw(){
           <button class="date-quick-btn" data-offset="-2" onclick="setQuickDate(-2)">2 วันก่อน</button>
           <button class="date-quick-btn" data-offset="-7" onclick="setQuickDate(-7)">สัปดาห์ที่แล้ว</button>
         </div>
-        <div class="date-display" id="wDateDisplay">${isoToThaiLong(selectedDate)}</div>
+        <!-- แสดง วว/ดด/ปปปป -->
+        <div class="date-display" id="wDateDisplay">${isoToDMY(selectedDate)}</div>
       </div>
     </div>
 
@@ -225,7 +275,7 @@ function renderWithdraw(){
 
   <div class="wd-summary-sticky">
     <div class="flex jb items-c" style="margin-bottom:10px">
-      <div class="fz12 txmute">รวม ${withdrawUnits.length} ชิ้น · ${isoToThaiLong(selectedDate)}</div>
+      <div class="fz12 txmute">รวม ${withdrawUnits.length} ชิ้น · ${isoToDMY(selectedDate)}</div>
     </div>
     <div class="flex gap8">
       <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="submitWd()" ${withdrawUnits.length===0?'disabled':''}>✅ ยืนยันเบิก</button>
@@ -273,26 +323,25 @@ function addCheckedWd(){
 }
 function removeWd(i){ withdrawUnits.splice(i,1); renderWithdraw(); }
 
-// ── Read form values safely ────────────────────────
+/* ── Read form values safely ──────────────────── */
 function readForm(){
   return {
-    usedAt:     (document.getElementById('wUsedAt')?.value||'').trim(),
-    reqBy:       document.getElementById('wReqBy')?.value||'',
-    dept:        document.getElementById('wDept')?.value||'',
-    hasService:  document.getElementById('wHasService')?.value||'no',
-    serviceRef:  document.getElementById('wServiceRef')?.value||'',
-    note:        document.getElementById('wNote')?.value||'',
+    usedAt:       (document.getElementById('wUsedAt')?.value||'').trim(),
+    reqBy:        document.getElementById('wReqBy')?.value||'',
+    dept:         getDeptValue(),
+    hasService:   document.getElementById('wHasService')?.value||'no',
+    serviceRef:   document.getElementById('wServiceRef')?.value||'',
+    note:         document.getElementById('wNote')?.value||'',
     withdrawDate: document.getElementById('wDate')?.value||selectedDate,
   };
 }
 
 async function submitWd(){
-  if(!withdrawUnits.length)return;
+  if(!withdrawUnits.length) return;
   const f = readForm();
-  selectedDate = f.withdrawDate; // sync
-  if(!f.usedAt){showNotif('กรุณาระบุสถานที่ใช้งาน','error');return;}
+  selectedDate = f.withdrawDate;
 
-  // Convert selected date to a JS Date for Firestore timestamp
+  // ── ไม่บังคับ usedAt แล้ว ──
   const txDate = new Date(f.withdrawDate + 'T00:00:00');
 
   try{
@@ -316,18 +365,15 @@ async function submitWd(){
     });
     await batch.commit();
 
-    // Update in-memory units
     withdrawUnits.forEach(w=>{
       const u=allUnits.find(x=>x.docId===w.unitId);
       if(u){u.status='used';u.usedAtLabel=f.usedAt;}
     });
 
     showNotif(`เบิกสำเร็จ ${withdrawUnits.length} ชิ้น`);
-    const lU=[...withdrawUnits];
-    const lF={...f, serviceNo:currentServiceNo};
+    // ── ไม่ pop confirm / ไม่ print อัตโนมัติ ──
     withdrawUnits=[]; currentServiceNo=genNo(); selectedDate=todayISO();
     renderWithdraw();
-    if(confirm('เบิกสำเร็จ! พิมพ์ใบเบิก?')) doPrint(lU, lF);
   }catch(e){showNotif(e.message,'error');}
 }
 
@@ -339,7 +385,7 @@ function printWd(){
 
 function doPrint(units, info){
   const stm={no:'ไม่มี',yes:'ใบ Service',job:'Job Order'};
-  const dateLabel = info.withdrawDate ? isoToThaiLong(info.withdrawDate) : isoToThaiLong(todayISO());
+  const dateLabel = info.withdrawDate ? isoToDMY(info.withdrawDate) : isoToDMY(todayISO());
   document.getElementById('printArea').innerHTML=`
   <div class="print-doc">
     <div class="print-header"><div class="print-title">ใบเบิกสินค้า / Spare Part Requisition</div><div>RYG Stock System</div></div>
