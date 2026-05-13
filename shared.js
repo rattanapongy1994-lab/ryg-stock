@@ -2,6 +2,71 @@
 //  RYG Stock — shared.js  (Firebase + Shell helpers)
 // ═══════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════
+//  THEME SYSTEM — apply on every page load
+// ═══════════════════════════════════════════════════
+(function(){
+  const saved = localStorage.getItem('ryg_theme') || 'ocean';
+  document.documentElement.setAttribute('data-theme', saved);
+})();
+
+const RYG_THEMES = [
+  { id:'ocean',  label:'Ocean',  dot:'#1D9E75', emoji:'🌊' },
+  { id:'indigo', label:'Indigo', dot:'#6366f1', emoji:'💜' },
+  { id:'rose',   label:'Rose',   dot:'#f43f5e', emoji:'🌹' },
+  { id:'amber',  label:'Amber',  dot:'#d97706', emoji:'🌟' },
+  { id:'slate',  label:'Dark',   dot:'#64748b', emoji:'🌙' },
+];
+
+function applyTheme(id) {
+  document.documentElement.setAttribute('data-theme', id);
+  localStorage.setItem('ryg_theme', id);
+  _renderThemeSwatches();
+}
+
+function _toggleThemePanel() {
+  let p = document.getElementById('_themePanel');
+  if (!p) return;
+  const isOpen = p.style.display === 'block';
+  p.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) _renderThemeSwatches();
+}
+
+function _renderThemeSwatches() {
+  const grid = document.getElementById('_themeGrid');
+  if (!grid) return;
+  const cur = document.documentElement.getAttribute('data-theme') || 'ocean';
+  grid.innerHTML = RYG_THEMES.map(t => `
+    <div onclick="applyTheme('${t.id}');_toggleThemePanel()" style="
+      display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;
+      border:2px solid ${t.id===cur?'var(--g)':'transparent'};
+      background:${t.id===cur?'var(--gll)':'var(--bg)'};cursor:pointer;
+      font-size:12px;font-weight:600;color:var(--tx1);transition:all .15s;">
+      <div style="width:16px;height:16px;border-radius:50%;background:${t.dot};flex-shrink:0"></div>
+      ${t.emoji} ${t.label}
+    </div>`).join('');
+}
+
+function _injectThemePanel() {
+  // Inject theme panel into body if not on dashboard (dashboard has its own)
+  if (document.getElementById('_themePanel')) return;
+  const panel = document.createElement('div');
+  panel.id = '_themePanel';
+  panel.style.cssText = `
+    display:none;position:fixed;top:calc(var(--topbar-h) + 8px);right:12px;
+    background:var(--surf);border:1px solid var(--bdr);border-radius:16px;
+    padding:14px 16px;z-index:300;box-shadow:0 8px 32px rgba(0,0,0,.2);width:230px;`;
+  panel.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🎨 ธีมสี</div>
+    <div id="_themeGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>`;
+  document.body.appendChild(panel);
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && !e.target.closest('[data-theme-btn]')) {
+      panel.style.display = 'none';
+    }
+  }, true);
+}
+
 // ─── Firebase Config ───────────────────────────────
 const FC = {
   apiKey: "AIzaSyABKbRCDNh5SHwvbuFtAudLnRYepZfXk7s",
@@ -91,6 +156,28 @@ function _renderUserBadge(user, role) {
   if (roleBadge) {
     roleBadge.textContent = role === 'admin' ? '🔑 Admin' : '👤 User';
     roleBadge.className   = `badge-role ${role === 'admin' ? 'badge-admin' : 'badge-user'}`;
+  }
+
+  // Inject theme button (for non-dashboard pages; dashboard has its own)
+  const userMini = document.querySelector('.user-mini');
+  if (userMini && !document.getElementById('_sharedThemeBtn') && !document.querySelector('.theme-btn')) {
+    const btn = document.createElement('button');
+    btn.id = '_sharedThemeBtn';
+    btn.setAttribute('data-theme-btn', '1');
+    btn.title = 'เลือกธีมสี';
+    btn.onclick = _toggleThemePanel;
+    btn.style.cssText = `
+      width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.4);
+      cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;
+      background:rgba(255,255,255,.15);backdrop-filter:blur(4px);
+      transition:transform .2s,box-shadow .2s;flex-shrink:0;`;
+    btn.textContent = '🎨';
+    btn.onmouseenter = () => { btn.style.transform='scale(1.1)'; btn.style.boxShadow='0 0 0 3px rgba(255,255,255,.2)'; };
+    btn.onmouseleave = () => { btn.style.transform=''; btn.style.boxShadow=''; };
+    // Insert before logout button
+    const logoutBtn = userMini.querySelector('.btn-topout');
+    userMini.insertBefore(btn, logoutBtn);
+    _injectThemePanel();
   }
 }
 
