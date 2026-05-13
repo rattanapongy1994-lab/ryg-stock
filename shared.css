@@ -547,3 +547,65 @@ textarea { resize: vertical; min-height: 72px; }
   color: var(--tx3);
   font-size: 13px;
 }
+/* ═══════════════════════════════════════════════════
+   THEME SYSTEM — added for multi-page theme support
+   Apply saved theme on every page via shared.js
+   ═══════════════════════════════════════════════════ */
+
+/* Theme: Ocean (Default — already defined in :root) */
+[data-theme="ocean"] {
+  --g:#1D9E75; --gd:#15785a; --gl:#a8ddc9; --gll:#eaf7f2;
+  --r:#E24B4A; --rl:#fdeaea; --am:#E67E22; --aml:#fef3e2;
+  --bg:#F4F6F8; --surf:#FFFFFF; --bdr:#E8ECF0; --bdrm:#D0D7DE;
+  --tx1:#111827; --tx2:#374151; --tx3:#6B7280;
+  --topbar-grad: linear-gradient(135deg,#0f5c43 0%,#1D9E75 100%);
+}
+/* Theme: Indigo */
+[data-theme="indigo"] {
+  --g:#6366f1; --gd:#4338ca; --gl:#c7d2fe; --gll:#eef2ff;
+  --r:#E24B4A; --rl:#fdeaea; --am:#E67E22; --aml:#fef3e2;
+  --bg:#F4F6F8; --surf:#FFFFFF; --bdr:#E8ECF0; --bdrm:#D0D7DE;
+  --tx1:#111827; --tx2:#374151; --tx3:#6B7280;
+  --topbar-grad: linear-gradient(135deg,#312e81 0%,#6366f1 100%);
+}
+/* Theme: Rose */
+[data-theme="rose"] {
+  --g:#f43f5e; --gd:#be123c; --gl:#fecdd3; --gll:#fff1f2;
+  --r:#E24B4A; --rl:#fdeaea; --am:#E67E22; --aml:#fef3e2;
+  --bg:#F4F6F8; --surf:#FFFFFF; --bdr:#E8ECF0; --bdrm:#D0D7DE;
+  --tx1:#111827; --tx2:#374151; --tx3:#6B7280;
+  --topbar-grad: linear-gradient(135deg,#9f1239 0%,#f43f5e 100%);
+}
+/* Theme: Amber */
+[data-theme="amber"] {
+  --g:#d97706; --gd:#92400e; --gl:#fcd34d; --gll:#fffbeb;
+  --r:#E24B4A; --rl:#fdeaea; --am:#E67E22; --aml:#fef3e2;
+  --bg:#F4F6F8; --surf:#FFFFFF; --bdr:#E8ECF0; --bdrm:#D0D7DE;
+  --tx1:#111827; --tx2:#374151; --tx3:#6B7280;
+  --topbar-grad: linear-gradient(135deg,#78350f 0%,#d97706 100%);
+}
+/* Theme: Slate Dark */
+[data-theme="slate"] {
+  --g:#64748b; --gd:#334155; --gl:#cbd5e1; --gll:#f8fafc;
+  --r:#f87171; --rl:#3f1010; --am:#fbbf24; --aml:#3f2d05;
+  --bg:#0f172a; --surf:#1e293b; --bdr:#334155; --bdrm:#475569;
+  --tx1:#f1f5f9; --tx2:#cbd5e1; --tx3:#94a3b8;
+  --topbar-grad: linear-gradient(135deg,#020617 0%,#334155 100%);
+}
+
+/* Topbar gradient — applies to all pages */
+.topbar {
+  background: var(--topbar-grad, var(--surf));
+  border-bottom: none;
+  box-shadow: 0 2px 12px rgba(0,0,0,.18);
+}
+.topbar-title   { color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.2); }
+.topbar-logo    { background:rgba(255,255,255,.2); backdrop-filter:blur(4px); }
+.user-name-top  { color:rgba(255,255,255,.9); }
+.badge-admin    { background:rgba(255,255,255,.18) !important; color:#fff !important; border-color:rgba(255,255,255,.3) !important; }
+.badge-user     { background:rgba(255,255,255,.18) !important; color:#fff !important; border-color:rgba(255,255,255,.3) !important; }
+.btn-topout     { border-color:rgba(255,255,255,.3) !important; color:#fff !important; background:rgba(255,255,255,.08) !important; }
+.btn-topout:hover { background:rgba(255,255,255,.2) !important; border-color:rgba(255,255,255,.5) !important; }
+
+/* Card border radius upgrade */
+.card { border-radius:16px; }
