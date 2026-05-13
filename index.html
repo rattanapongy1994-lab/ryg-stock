@@ -11,6 +11,40 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="shared.js"></script>
+<style>
+/* ── Dash grid ───────────────────────────── */
+.dash-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+.dash-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px; }
+@media(max-width:600px){
+  .dash-2,.dash-3 { grid-template-columns:1fr; }
+}
+
+/* ── Mini bar ────────────────────────────── */
+.mini-bar-bg { flex:1; height:6px; background:var(--bg); border-radius:3px; overflow:hidden; }
+.mini-bar-fill { height:100%; border-radius:3px; background:var(--g); transition:width .4s; }
+.mini-bar-fill.amber { background:var(--am); }
+
+/* ── Row item ────────────────────────────── */
+.dash-row { display:flex; align-items:center; gap:10px; padding:7px 0;
+  border-bottom:1px solid var(--bdr); }
+.dash-row:last-child { border-bottom:none; }
+
+/* ── Trend chip ──────────────────────────── */
+.trend-up   { color:var(--gd); font-size:11px; font-weight:700; }
+.trend-down { color:var(--r);  font-size:11px; font-weight:700; }
+.trend-flat { color:var(--tx3);font-size:11px; font-weight:700; }
+
+/* ── Damaged dot ─────────────────────────── */
+.dot-r { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--r); flex-shrink:0; }
+.dot-g { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--g); flex-shrink:0; }
+.dot-a { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--am); flex-shrink:0; }
+
+/* ── Stat compare ────────────────────────── */
+.cmp-block { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.cmp-num   { font-size:22px; font-weight:700; line-height:1; }
+.cmp-lbl   { font-size:11px; color:var(--tx3); }
+.cmp-divider { width:1px; background:var(--bdrm); align-self:stretch; }
+</style>
 </head>
 <body>
 <div id="loadingScreen">
@@ -48,8 +82,9 @@ initShell('dashboard', async (user, role, firestore) => {
 });
 
 async function loadItems(){
-  const snap=await db.collection('items').orderBy('id').get();
+  const snap=await db.collection('items').get();
   allItems=snap.docs.map(d=>({docId:d.id,...d.data()}));
+  allItems.sort((a,b)=>(a.id||'').localeCompare(b.id||''));
   if(!allItems.length) await seedItems();
 }
 async function seedItems(){
@@ -66,52 +101,21 @@ async function seedItems(){
     {id:'SP010',name:'RAM PC4 4GB',min:2,loc:'ชั้น IT',cat:'Memory'},
     {id:'SP011',name:'CPU',min:3,loc:'ชั้น IT',cat:'Component'},
     {id:'SP012',name:'GPU',min:2,loc:'ชั้น IT',cat:'Component'},
-    {id:'SP013',name:'PCI USB Card 4 Port',min:1,loc:'ชั้น IT',cat:'Component'},
-    {id:'SP014',name:'PCI USB Card 2 Port',min:2,loc:'ชั้น IT',cat:'Component'},
-    {id:'SP015',name:'PCI Network Adapter',min:2,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP016',name:'Power Supply 550W Bronze',min:1,loc:'ชั้น IT',cat:'Component'},
-    {id:'SP017',name:'Power Supply DELL 240V',min:1,loc:'ชั้น IT',cat:'Component'},
-    {id:'SP018',name:'Switch ZYXEL 16 Port',min:1,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP019',name:'Switch ZYXEL 24 Port',min:1,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP020',name:'Switch Aruba 24G 4SFP',min:1,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP021',name:'Switch D-Link 8 Port',min:1,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP022',name:'Switch D-Link 16 Port',min:2,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP023',name:'Switch D-Link 24 Port',min:1,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP024',name:'Switch Dahua POE 8-Port',min:1,loc:'ชั้น IT',cat:'Network'},
-    {id:'SP025',name:'Dahua IP Camera',min:1,loc:'ชั้น IT',cat:'Camera'},
-    {id:'SP026',name:'Starcam IP Camera',min:1,loc:'ชั้น IT',cat:'Camera'},
-    {id:'SP027',name:'VGA to HDMI',min:1,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP028',name:'HDMI to VGA',min:1,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP029',name:'DisplayPort to HDMI',min:1,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP030',name:'DisplayPort to VGA',min:1,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP031',name:'สาย AC Power',min:5,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP032',name:'สาย VGA',min:5,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP033',name:'สาย DisplayPort',min:2,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP034',name:'สาย HDMI',min:3,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP035',name:'สาย Printer USB',min:3,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP036',name:'สายแลน OUTDOOR CAT6',min:1,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP037',name:'สายแลน OUTDOOR Sling CAT6',min:1,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP038',name:'หัวสายแลน CAT6 RJ45',min:5,loc:'ชั้น IT',cat:'Cable'},
-    {id:'SP039',name:'Adapter 12V 2A',min:2,loc:'ชั้น IT',cat:'Power'},
-    {id:'SP040',name:'Switching PSU 5A',min:1,loc:'ชั้น IT',cat:'Power'},
-    {id:'SP041',name:'Switching PSU 20A',min:1,loc:'ชั้น IT',cat:'Power'},
-    {id:'SP042',name:'Switching PSU 10A',min:1,loc:'ชั้น IT',cat:'Power'},
-    {id:'SP043',name:'Monitor',min:2,loc:'ชั้น IT',cat:'Device'},
-    {id:'SP044',name:'Computer',min:1,loc:'ชั้น IT',cat:'Device'},
     {id:'SP045',name:'Keyboard',min:2,loc:'ชั้น IT',cat:'Device'},
     {id:'SP046',name:'Mouse',min:2,loc:'ชั้น IT',cat:'Device'},
     {id:'SP047',name:'Webcam',min:2,loc:'ชั้น IT',cat:'Device'},
-    {id:'SP048',name:'ลำโพงเล็กสีดำ',min:1,loc:'ชั้น IT',cat:'Device'},
-    {id:'SP049',name:'Printer',min:1,loc:'ชั้น IT',cat:'Device'},
+    {id:'SP043',name:'Monitor',min:2,loc:'ชั้น IT',cat:'Device'},
   ];
   const batch=db.batch();
   seed.forEach(i=>batch.set(db.collection('items').doc(i.id),i));
   await batch.commit(); await loadItems();
 }
+
 async function loadUnits(){
   const snap=await db.collection('units').get();
   allUnits=snap.docs.map(d=>({docId:d.id,...d.data()}));
 }
+
 function getItemQty(id){ return allUnits.filter(u=>u.itemId===id&&u.status==='available').length; }
 function getStatus(id){
   const q=getItemQty(id),item=allItems.find(i=>i.id===id);
@@ -124,49 +128,230 @@ function statusBadge(id){
   return'<span class="badge badge-ok">ปกติ</span>';
 }
 
-let histUnsub=null;
-function subscribeHistory(){
-  if(histUnsub)histUnsub();
-  histUnsub=db.collection('transactions').orderBy('createdAt','desc').limit(200)
-    .onSnapshot(snap=>{ historyData=snap.docs.map(d=>({id:d.id,...d.data()})); renderDashboard(); });
+// ── Date helpers ──────────────────────────────
+function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function startOfPrevMonth(d){ return new Date(d.getFullYear(), d.getMonth()-1, 1); }
+function endOfPrevMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 0, 23, 59, 59, 999); }
+
+function tsToDate(ts){
+  if(!ts) return null;
+  if(ts.toDate) return ts.toDate();
+  if(ts instanceof Date) return ts;
+  return new Date(ts);
 }
 
+// ── History subscription ──────────────────────
+let histUnsub=null;
+function subscribeHistory(){
+  if(histUnsub) histUnsub();
+  histUnsub=db.collection('transactions').orderBy('createdAt','desc').limit(500)
+    .onSnapshot(snap=>{
+      historyData=snap.docs.map(d=>({id:d.id,...d.data()}));
+      renderDashboard();
+    });
+}
+
+// ── Main render ───────────────────────────────
 function renderDashboard(){
-  const totalAvail=allUnits.filter(u=>u.status==='available').length;
-  const out=allItems.filter(i=>getItemQty(i.id)<=0).length;
-  const low=allItems.filter(i=>{const q=getItemQty(i.id);return q>0&&q<=(i.min||1);}).length;
+  const now = new Date();
+  const todayStart   = startOfDay(now);
+  const monthStart   = startOfMonth(now);
+  const prevMonthStart = startOfPrevMonth(now);
+  const prevMonthEnd   = endOfPrevMonth(now);
+
+  // ── Stat cards ────────────────────────────
+  const totalAvail = allUnits.filter(u=>u.status==='available').length;
+  const out  = allItems.filter(i=>getItemQty(i.id)<=0).length;
+  const low  = allItems.filter(i=>{ const q=getItemQty(i.id); return q>0&&q<=(i.min||1); }).length;
+
+  // ── [1] เบิกวันนี้ / เดือนนี้ / เดือนที่แล้ว ──
+  const outTx = historyData.filter(h=>h.type==='out');
+  const todayOut     = outTx.filter(h=>{ const d=tsToDate(h.createdAt); return d&&d>=todayStart; }).length;
+  const thisMonthOut = outTx.filter(h=>{ const d=tsToDate(h.createdAt); return d&&d>=monthStart; }).length;
+  const prevMonthOut = outTx.filter(h=>{ const d=tsToDate(h.createdAt); return d&&d>=prevMonthStart&&d<=prevMonthEnd; }).length;
+
+  let trendHTML='';
+  if(prevMonthOut>0){
+    const pct=Math.round((thisMonthOut-prevMonthOut)/prevMonthOut*100);
+    if(pct>0) trendHTML=`<span class="trend-up">↑ +${pct}% vs เดือนที่แล้ว</span>`;
+    else if(pct<0) trendHTML=`<span class="trend-down">↓ ${pct}% vs เดือนที่แล้ว</span>`;
+    else trendHTML=`<span class="trend-flat">= เท่ากับเดือนที่แล้ว</span>`;
+  }
+
+  // ── [2] Top 5 เบิกบ่อย ────────────────────
+  const itemCount={};
+  outTx.forEach(h=>{ if(h.itemId) itemCount[h.itemId]=(itemCount[h.itemId]||0)+(h.qty||1); });
+  const top5 = Object.entries(itemCount)
+    .sort((a,b)=>b[1]-a[1]).slice(0,5)
+    .map(([id,cnt])=>({ id, cnt, name: allItems.find(i=>i.id===id)?.name||id }));
+  const maxTop = top5[0]?.cnt||1;
+
+  // ── [4] ชำรุด ─────────────────────────────
+  const damaged = allUnits.filter(u=>u.status==='damaged');
+  const damagedByItem={};
+  damaged.forEach(u=>{ damagedByItem[u.itemId]=(damagedByItem[u.itemId]||0)+1; });
+  const damagedList = Object.entries(damagedByItem)
+    .map(([id,cnt])=>({ id, cnt, name: allItems.find(i=>i.id===id)?.name||id }))
+    .sort((a,b)=>b.cnt-a.cnt).slice(0,5);
+
+  // ── [5] เบิกออกนานสุด ─────────────────────
+  const usedUnits = allUnits
+    .filter(u=>u.status==='used'&&u.usedAt)
+    .map(u=>{
+      const d=tsToDate(u.usedAt);
+      const days=d?Math.floor((now-d)/(1000*60*60*24)):0;
+      const item=allItems.find(i=>i.id===u.itemId);
+      return { ...u, days, itemName: item?.name||u.itemId };
+    })
+    .sort((a,b)=>b.days-a.days).slice(0,5);
+
+  // ── [6] นำเข้าล่าสุด ──────────────────────
+  const inTx = historyData.filter(h=>h.type==='in').slice(0,5);
+
+  // ── Alerts ────────────────────────────────
+  const alerts = allItems.filter(i=>getStatus(i.id)!=='ok').slice(0,8);
+
+  // ── Bar chart by group ────────────────────
   const cats={};
-  allItems.forEach(i=>{const g=getGroupKey(i.cat);cats[g]=(cats[g]||0)+getItemQty(i.id);});
+  allItems.forEach(i=>{ const g=getGroupKey(i.cat); cats[g]=(cats[g]||0)+getItemQty(i.id); });
   const topCats=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   const maxV=topCats[0]?topCats[0][1]:1;
-  const recent=historyData.slice(0,6);
-  const alerts=allItems.filter(i=>getStatus(i.id)!=='ok').slice(0,8);
+
   document.getElementById('mainContent').innerHTML=`
-  <div class="stat-grid">
+
+  <!-- ── Stat cards ── -->
+  <div class="stat-grid" style="margin-bottom:12px">
     <div class="stat-card"><div class="stat-label">ประเภทสินค้า</div><div class="stat-value">${allItems.length}</div><div class="stat-sub">รายการ</div></div>
     <div class="stat-card"><div class="stat-label">ชิ้นส่วนพร้อมใช้</div><div class="stat-value">${totalAvail}</div><div class="stat-sub">ชิ้น</div></div>
     <div class="stat-card"><div class="stat-label" style="color:var(--am)">ใกล้หมด</div><div class="stat-value" style="color:var(--am)">${low}</div><div class="stat-sub">รายการ</div></div>
     <div class="stat-card"><div class="stat-label" style="color:var(--r)">หมดสต็อก</div><div class="stat-value" style="color:var(--r)">${out}</div><div class="stat-sub">รายการ</div></div>
   </div>
-  <div class="dash-grid">
+
+  <!-- ── [1] เบิก + [2] Top5 ── -->
+  <div class="dash-2">
+
+    <!-- [1] วันนี้ / เดือนนี้ / เดือนที่แล้ว -->
     <div class="card">
-      <div class="card-header"><span class="card-title">สต็อกตามกลุ่ม</span></div>
+      <div class="card-header"><span class="card-title">📤 การเบิกสินค้า</span></div>
       <div style="padding:1rem">
-        ${topCats.map(([k,v])=>{const g=getGroupDef(k);return`
-          <div style="margin-bottom:11px">
-            <div class="flex jb fz12" style="margin-bottom:4px"><span>${g.icon} ${g.label}</span><span class="txmute">${v} ชิ้น</span></div>
-            <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(v/maxV*100)}%"></div></div>
-          </div>`;}).join('')}
+        <div style="display:flex;gap:0;align-items:stretch">
+          <div class="cmp-block" style="flex:1">
+            <div class="cmp-lbl">วันนี้</div>
+            <div class="cmp-num" style="color:var(--g)">${todayOut}</div>
+            <div class="cmp-lbl">ชิ้น</div>
+          </div>
+          <div class="cmp-divider"></div>
+          <div class="cmp-block" style="flex:1">
+            <div class="cmp-lbl">เดือนนี้</div>
+            <div class="cmp-num">${thisMonthOut}</div>
+            <div class="cmp-lbl">ชิ้น</div>
+          </div>
+          <div class="cmp-divider"></div>
+          <div class="cmp-block" style="flex:1">
+            <div class="cmp-lbl">เดือนที่แล้ว</div>
+            <div class="cmp-num" style="color:var(--tx3)">${prevMonthOut}</div>
+            <div class="cmp-lbl">ชิ้น</div>
+          </div>
+        </div>
+        ${trendHTML?`<div style="margin-top:12px;text-align:center">${trendHTML}</div>`:''}
       </div>
     </div>
+
+    <!-- [2] Top 5 เบิกบ่อย -->
     <div class="card">
-      <div class="card-header"><span class="card-title">ความเคลื่อนไหวล่าสุด</span></div>
-      <div style="padding:1rem">
-        ${recent.length===0?'<div class="empty-state">ยังไม่มีรายการ</div>':
-          recent.map(h=>`<div class="flex gap8 items-c" style="margin-bottom:10px">
-            <div class="hist-dot" style="background:${h.type==='in'?'#1D9E75':'#E24B4A'};flex-shrink:0"></div>
+      <div class="card-header"><span class="card-title">🏆 เบิกบ่อยสุด (ทั้งหมด)</span></div>
+      <div style="padding:.5rem 1rem">
+        ${top5.length===0
+          ? '<div class="fz12 txmute" style="padding:6px 0">ยังไม่มีประวัติการเบิก</div>'
+          : top5.map((t,i)=>`
+          <div class="dash-row">
+            <div class="fz11 txmute" style="min-width:14px">${i+1}</div>
+            <div style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}</div>
+            <div class="mini-bar-bg" style="max-width:80px"><div class="mini-bar-fill${t.cnt/maxTop<0.5?' amber':''}" style="width:${Math.round(t.cnt/maxTop*100)}%"></div></div>
+            <div class="fz12 fw7" style="min-width:24px;text-align:right">${t.cnt}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── [4] ชำรุด + [5] เบิกนาน ── -->
+  <div class="dash-2">
+
+    <!-- [4] สินค้าชำรุด -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔧 สินค้าชำรุด</span>
+        ${damaged.length>0?`<span class="badge badge-out">${damaged.length} ชิ้น</span>`:''}
+      </div>
+      <div style="padding:.5rem 1rem">
+        ${damagedList.length===0
+          ? '<div class="fz12 txmute" style="padding:6px 0">ไม่มีชิ้นส่วนชำรุด 🎉</div>'
+          : damagedList.map(d=>`
+          <div class="dash-row">
+            <span class="dot-r"></span>
+            <div style="flex:1;font-size:12px">${d.name}</div>
+            <span class="badge badge-out">${d.cnt} ชิ้น</span>
+          </div>`).join('')}
+        ${damaged.length>5?`<div class="fz11 txmute" style="margin-top:6px">และอีก ${damaged.length-5} ชิ้น...</div>`:''}
+      </div>
+    </div>
+
+    <!-- [5] เบิกออกนานสุด -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">⏱️ เบิกออกนานสุด</span></div>
+      <div style="padding:.5rem 1rem">
+        ${usedUnits.length===0
+          ? '<div class="fz12 txmute" style="padding:6px 0">ไม่มีของที่เบิกออก</div>'
+          : usedUnits.map(u=>`
+          <div class="dash-row">
             <div style="flex:1;min-width:0">
-              <div class="fz12 fw7" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.type==='in'?'นำเข้า':'เบิก'} ${h.itemName}</div>
+              <div class="fz12" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.itemName}</div>
+              ${u.usedAtLabel?`<div class="fz11 txmute">📍 ${u.usedAtLabel}</div>`:''}
+            </div>
+            <span class="badge ${u.days>=30?'badge-out':u.days>=14?'badge-low':'badge-ok'}">${u.days} วัน</span>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── [6] นำเข้าล่าสุด + ความเคลื่อนไหว ── -->
+  <div class="dash-2">
+
+    <!-- [6] นำเข้าล่าสุด -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">📥 นำเข้าล่าสุด</span></div>
+      <div style="padding:.5rem 1rem">
+        ${inTx.length===0
+          ? '<div class="fz12 txmute" style="padding:6px 0">ยังไม่มีการนำเข้า</div>'
+          : inTx.map(h=>`
+          <div class="dash-row">
+            <span class="dot-g"></span>
+            <div style="flex:1;min-width:0">
+              <div class="fz12" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.itemName}</div>
+              <div class="fz11 txmute">${h.userName||''}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div class="fz12 fw7" style="color:var(--g)">+${h.qty||1} ชิ้น</div>
+              <div class="fz11 txmute">${formatDT(h.createdAt)}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- ความเคลื่อนไหวล่าสุด (in+out) -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">🔄 ความเคลื่อนไหวล่าสุด</span></div>
+      <div style="padding:.5rem 1rem">
+        ${historyData.length===0
+          ? '<div class="fz12 txmute" style="padding:6px 0">ยังไม่มีรายการ</div>'
+          : historyData.slice(0,5).map(h=>`
+          <div class="dash-row">
+            <span class="${h.type==='in'?'dot-g':'dot-r'}"></span>
+            <div style="flex:1;min-width:0">
+              <div class="fz12" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                ${h.type==='in'?'นำเข้า':'เบิก'} ${h.itemName}
+              </div>
               <div class="fz11 txmute">${h.userName||''}</div>
             </div>
             <div class="fz11 txmute" style="flex-shrink:0">${formatDT(h.createdAt)}</div>
@@ -174,17 +359,53 @@ function renderDashboard(){
       </div>
     </div>
   </div>
-  ${alerts.length>0?`
-  <div class="card">
-    <div class="card-header"><span class="card-title">⚠️ ต้องจัดการ</span></div>
-    <div style="padding:.5rem 0">
-      ${alerts.map(i=>`
-        <div class="item-row" onclick="navigate('stock')">
-          <div><div class="item-name">${i.name}</div><div class="item-code">${i.id}</div></div>
-          <div class="item-right">${statusBadge(i.id)}<span class="fz12 fw7">${getItemQty(i.id)} ชิ้น</span></div>
-        </div>`).join('')}
+
+  <!-- ── สต็อกตามกลุ่ม + Alerts ── -->
+  <div class="dash-2">
+
+    <!-- Bar chart กลุ่ม -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">📊 สต็อกตามกลุ่ม</span></div>
+      <div style="padding:1rem">
+        ${topCats.map(([k,v])=>{
+          const g=getGroupDef(k);
+          return`
+          <div style="margin-bottom:10px">
+            <div class="flex jb fz12" style="margin-bottom:4px">
+              <span>${g.icon} ${g.label}</span>
+              <span class="txmute">${v} ชิ้น</span>
+            </div>
+            <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(v/maxV*100)}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
     </div>
-  </div>`:''}`;
+
+    <!-- Alerts -->
+    ${alerts.length>0?`
+    <div class="card">
+      <div class="card-header"><span class="card-title">⚠️ ต้องจัดการ</span></div>
+      <div style="padding:.5rem 0">
+        ${alerts.map(i=>`
+          <div class="item-row" onclick="navigate('stock')" style="cursor:pointer">
+            <div style="min-width:0">
+              <div class="item-name">${i.name}</div>
+              <div class="item-code">${i.id}</div>
+            </div>
+            <div class="item-right">
+              ${statusBadge(i.id)}
+              <span class="fz12 fw7">${getItemQty(i.id)} ชิ้น</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`
+    :`<div class="card" style="display:flex;align-items:center;justify-content:center;min-height:120px">
+        <div style="text-align:center">
+          <div style="font-size:28px">🎉</div>
+          <div class="fz13 fw7" style="margin-top:6px;color:var(--g)">สต็อกปกติทุกรายการ</div>
+        </div>
+      </div>`}
+  </div>`;
 }
 </script>
 </body>
