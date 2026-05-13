@@ -247,6 +247,35 @@
 .service-no-wrap.show {
   display: block;
 }
+
+/* ══════════════════════════════════════════════
+   ── MODAL POSITION FIX — อยู่กลางหน้าจอ ──────
+   ══════════════════════════════════════════════ */
+
+/* overlay ของ shared.js — บังคับกลางหน้าจอทั้ง desktop & mobile */
+.modal-overlay,
+[class*="modal-wrap"],
+[class*="modal-backdrop"] {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+}
+
+/* กล่อง modal เอง — ไม่ให้ชนขอบล่าง */
+.modal-sheet,
+.modal-box,
+.modal-container,
+[class*="modal-inner"] {
+  margin: auto !important;
+  border-radius: 16px !important;
+  max-height: 88vh !important;
+  overflow-y: auto !important;
+  /* ยกเลิก bottom-sheet positioning */
+  position: relative !important;
+  bottom: unset !important;
+  top: unset !important;
+  transform: none !important;
+}
 </style>
 </head>
 <body>
