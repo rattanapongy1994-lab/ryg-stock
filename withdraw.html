@@ -14,7 +14,18 @@
 <style>
 /* Date picker styling */
 .date-input-wrap { position: relative; }
+
+/* hidden native date input สำหรับ picker เท่านั้น */
 .date-input-wrap input[type="date"] {
+  opacity: 0;
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ช่องแสดงวันที่ วว/ดด/ปปปป */
+.date-input-wrap input[type="text"] {
   width: 100%;
   padding: 9px 12px;
   border: 1.5px solid var(--bdrm);
@@ -24,27 +35,14 @@
   background: var(--surf);
   color: var(--tx1);
   cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
+  box-sizing: border-box;
 }
-.date-input-wrap input[type="date"]:focus {
+.date-input-wrap input[type="text"]:focus {
   outline: none;
   border-color: var(--g);
   box-shadow: 0 0 0 3px var(--gll);
 }
-/* แสดงวันที่แบบ วว/ดด/ปปปป */
-.date-display {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx1);
-  margin-top: 5px;
-  padding: 6px 10px;
-  background: var(--bg);
-  border-radius: var(--rad);
-  border: 1px solid var(--bdrm);
-  display: inline-block;
-  min-width: 120px;
-}
+
 /* Quick date buttons */
 .date-quick {
   display: flex;
@@ -69,6 +67,7 @@
   color: #fff;
   border-color: var(--g);
 }
+
 /* Dept other input */
 #wDeptOther {
   margin-top: 6px;
@@ -111,7 +110,7 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-/* ── วันที่: วว/ดด/ปปปป (พ.ศ.) ─────────────────── */
+/* ── วันที่: วว/ดด/ปปปป ─────────────────────────── */
 function isoToDMY(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -151,7 +150,9 @@ function setQuickDate(offset) {
   d.setDate(d.getDate() + offset);
   selectedDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const inp = document.getElementById('wDate');
-  if (inp) { inp.value = selectedDate; updateDateDisplay(); }
+  if (inp) inp.value = selectedDate;
+  const txt = document.getElementById('wDateText');
+  if (txt) txt.value = isoToDMY(selectedDate);
   document.querySelectorAll('.date-quick-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.offset === String(offset));
   });
@@ -159,13 +160,22 @@ function setQuickDate(offset) {
 
 function onDateChange() {
   const inp = document.getElementById('wDate');
-  if (inp) { selectedDate = inp.value || todayISO(); updateDateDisplay(); }
+  if (inp) {
+    selectedDate = inp.value || todayISO();
+    const txt = document.getElementById('wDateText');
+    if (txt) txt.value = isoToDMY(selectedDate);
+  }
   document.querySelectorAll('.date-quick-btn').forEach(b => b.classList.remove('active'));
 }
 
-function updateDateDisplay() {
-  const el = document.getElementById('wDateDisplay');
-  if (el) el.textContent = selectedDate ? isoToDMY(selectedDate) : '';
+function openDatePicker() {
+  const inp = document.getElementById('wDate');
+  if (!inp) return;
+  if (inp.showPicker) {
+    try { inp.showPicker(); } catch(e) { inp.click(); }
+  } else {
+    inp.click();
+  }
 }
 
 /* ── แผนก dropdown ─────────────────────────────── */
@@ -222,21 +232,25 @@ function renderWithdraw(){
           <option value="job">Job Order</option>
         </select></div>
     </div>
-    <div class="field"><label>เลขที่ / รายละเอียดงาน</label><input id="wServiceRef" placeholder="เลขที่อ้างอิง"/></div>
 
-    <!-- ── วันที่เบิก ─────────────────────────── -->
+    <!-- ── แก้ไข: label เหลือแค่ รายละเอียดงาน ── -->
+    <div class="field"><label>รายละเอียดงาน</label><input id="wServiceRef" placeholder="รายละเอียดงาน"/></div>
+
+    <!-- ── วันที่เบิก: แสดง วว/ดด/ปปปป ในช่องโดยตรง ── -->
     <div class="field">
       <label>📅 วันที่เบิก</label>
       <div class="date-input-wrap">
+        <!-- hidden native date input สำหรับเปิด picker เท่านั้น -->
         <input type="date" id="wDate" value="${selectedDate}" onchange="onDateChange()"/>
+        <!-- ช่องแสดงผล วว/ดด/ปปปป -->
+        <input type="text" id="wDateText" value="${isoToDMY(selectedDate)}"
+          placeholder="วว/ดด/ปปปป" readonly onclick="openDatePicker()"/>
         <div class="date-quick">
           <button class="date-quick-btn${selectedDate===todayISO()?' active':''}" data-offset="0" onclick="setQuickDate(0)">วันนี้</button>
           <button class="date-quick-btn" data-offset="-1" onclick="setQuickDate(-1)">เมื่อวาน</button>
           <button class="date-quick-btn" data-offset="-2" onclick="setQuickDate(-2)">2 วันก่อน</button>
           <button class="date-quick-btn" data-offset="-7" onclick="setQuickDate(-7)">สัปดาห์ที่แล้ว</button>
         </div>
-        <!-- แสดง วว/ดด/ปปปป -->
-        <div class="date-display" id="wDateDisplay">${isoToDMY(selectedDate)}</div>
       </div>
     </div>
 
@@ -341,7 +355,6 @@ async function submitWd(){
   const f = readForm();
   selectedDate = f.withdrawDate;
 
-  // ── ไม่บังคับ usedAt แล้ว ──
   const txDate = new Date(f.withdrawDate + 'T00:00:00');
 
   try{
@@ -371,7 +384,6 @@ async function submitWd(){
     });
 
     showNotif(`เบิกสำเร็จ ${withdrawUnits.length} ชิ้น`);
-    // ── ไม่ pop confirm / ไม่ print อัตโนมัติ ──
     withdrawUnits=[]; currentServiceNo=genNo(); selectedDate=todayISO();
     renderWithdraw();
   }catch(e){showNotif(e.message,'error');}
